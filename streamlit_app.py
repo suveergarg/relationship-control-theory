@@ -215,7 +215,7 @@ def _bowl_plotly_figure(
             z=[za[j]],
             mode="markers",
             marker=dict(size=8, color="#1f77b4"),
-            name="A",
+            name="Blue marble — Person A (x₁)",
             showlegend=True,
         ),
         go.Scatter3d(
@@ -224,7 +224,7 @@ def _bowl_plotly_figure(
             z=[zb[j]],
             mode="markers",
             marker=dict(size=8, color="#ff7f0e"),
-            name="B",
+            name="Orange marble — Person B (x₂)",
             showlegend=True,
         ),
     ]
@@ -260,16 +260,16 @@ def _bowl_plotly_figure(
             y=[ya[j]],
             mode="markers",
             marker=dict(size=11, color="#1f77b4"),
-            name="A",
-            showlegend=True,
+            name="Blue marble — Person A (x₁)",
+            showlegend=False,
         ),
         go.Scatter(
             x=[xb[j]],
             y=[yb[j]],
             mode="markers",
             marker=dict(size=11, color="#ff7f0e"),
-            name="B",
-            showlegend=True,
+            name="Orange marble — Person B (x₂)",
+            showlegend=False,
         ),
     ]
     fig = make_subplots(
@@ -278,7 +278,7 @@ def _bowl_plotly_figure(
         specs=[[{"type": "scatter3d"}, {"type": "scatter"}]],
         column_widths=[0.52, 0.48],
         horizontal_spacing=0.05,
-        subplot_titles=("Bowl (3D) — auto-looping", "Bowl plan (2D) — auto-looping"),
+        subplot_titles=("Bowl (3D)", "Bowl plan (2D)"),
     )
     fig.add_trace(surface, row=1, col=1)
     for tr in traces_3d:
@@ -289,10 +289,19 @@ def _bowl_plotly_figure(
     cam = _orbit_camera(camera_step)
     fig.update_layout(
         height=480,
-        margin=dict(l=0, r=0, t=56, b=24),
+        margin=dict(l=0, r=0, t=72, b=24),
         paper_bgcolor="#ffffff",
         showlegend=True,
         legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.7)", borderwidth=0),
+        title=dict(
+            text="Marbles = the two people on the bowl · blue = Person A (x₁) · orange = Person B (x₂)",
+            x=0.5,
+            xanchor="center",
+            yanchor="top",
+            yref="paper",
+            y=1.0,
+            font=dict(size=12, color="#334155"),
+        ),
     )
     fig.update_layout(
         scene=dict(
@@ -374,8 +383,7 @@ def _onboarding_card() -> None:
     <span style="font-weight: 600;">You drift</span>
   </p>
   <p style="margin: 0; font-size: 1.02rem; color: #5c4338; line-height: 1.55;">
-    Turn the knobs —<br/>
-    and see what happens
+    Turn the knobs below to see how the system behaves.
   </p>
 </div>
 """,
@@ -618,10 +626,6 @@ def main() -> None:
     st.session_state._bowl_anim_idx = 0
 
     st.subheader("Bowl trajectories (auto-loop)")
-    st.caption(
-        "Starts automatically and repeats. 3D and plan views share one chart (smoother than two) "
-        "with the same orbit as the desktop GUI; timing uses Streamlit’s fragment scheduler."
-    )
     _bowl_auto_loop_fragment()
 
     st.subheader(f"Emotional states — {regime}")
