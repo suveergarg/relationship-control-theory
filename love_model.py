@@ -176,7 +176,7 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
         },
     ),
     (
-        "high damping",
+        "high baseline recovery",
         {
             "a1": 1.65,
             "a2": 1.55,
@@ -311,7 +311,7 @@ UNSTABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
         },
     ),
     (
-        "weak damping strong coupling",
+        "weak baseline recovery, strong coupling",
         {
             "a1": 0.35,
             "a2": 0.38,
@@ -373,8 +373,8 @@ UNSTABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
 ]
 
 SLIDER_DISPLAY_LABELS: dict[str, str] = {
-    "a1": "A: emotional persistence",
-    "a2": "B: emotional persistence",
+    "a1": "A: baseline recovery rate",
+    "a2": "B: baseline recovery rate",
     "b1": "A: partner influence",
     "b2": "B: partner influence",
     "k1": "A: reward sensitivity",

@@ -51,7 +51,7 @@
   <text x="170" y="100"
         font-family="DejaVu Sans, Arial, sans-serif"
         font-size="20" fill="#374151">
-    decay / noise / need
+    baseline recovery / noise / need
   </text>
 
   <!-- Right self loop -->
@@ -63,6 +63,6 @@
   <text x="720" y="100"
         font-family="DejaVu Sans, Arial, sans-serif"
         font-size="20" fill="#374151">
-    decay / noise / need
+    baseline recovery / noise / need
   </text>
 </svg>

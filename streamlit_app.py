@@ -413,7 +413,7 @@ def _attachment_theory_section() -> None:
   <div style="margin-bottom: 1rem;">
     <p style="margin: 0 0 0.35rem 0; font-weight: 700; color: #0f172a;">❤️ Secure</p>
     <p style="margin: 0 0 0.25rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
-      Moderate influence + reward, good damping<br/>
+      Moderate influence + reward, strong baseline recovery<br/>
       Low delay, low noise<br/>
       System converges smoothly
     </p>
@@ -424,7 +424,7 @@ def _attachment_theory_section() -> None:
     <p style="margin: 0 0 0.35rem 0; font-weight: 700; color: #0f172a;">🔥 Anxious</p>
     <p style="margin: 0 0 0.25rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
       High influence + high reward<br/>
-      Low damping (needs constant input)<br/>
+      Weak baseline recovery (needs constant input)<br/>
       System overshoots / oscillates
     </p>
     <p style="margin: 0; font-size: 0.92rem; color: #64748b;">👉 Intense, reactive, amplification loops</p>
@@ -434,7 +434,7 @@ def _attachment_theory_section() -> None:
     <p style="margin: 0 0 0.35rem 0; font-weight: 700; color: #0f172a;">🧊 Avoidant</p>
     <p style="margin: 0 0 0.25rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
       Low influence + low reward<br/>
-      High self-stability<br/>
+      Strong baseline recovery, little partner input<br/>
       Weak coupling
     </p>
     <p style="margin: 0; font-size: 0.92rem; color: #64748b;">👉 Calm but distant, low emotional exchange</p>
@@ -481,20 +481,20 @@ def _stability_eigenview_section() -> None:
     The key balance is:
   </p>
   <p style="margin: 0 0 1rem 0; font-size: 0.95rem; color: #475569; line-height: 1.55;">
-    <strong>mutual coupling</strong> vs <strong>self-damping</strong> vs <strong>adjustment</strong>
+    <strong>mutual coupling</strong> vs <strong>baseline recovery rate</strong> vs <strong>adjustment</strong>
   </p>
   <p style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #475569; line-height: 1.55;">
     <strong>Coupling</strong> = influence + reward<br/>
     <strong>Adjustment</strong> = how actively you correct toward your needs<br/>
-    <strong>Damping</strong> = how well you stabilize yourself
+    <strong>Baseline recovery rate</strong> = how fast you settle back toward your emotional baseline
   </p>
   <p style="margin: 0 0 0.5rem 0; font-size: 0.92rem; color: #0369a1; line-height: 1.5;">
     👉 <strong>Stability condition (core):</strong><br/>
-    (coupling + adjustment)² &lt; (self-damping)²
-    <span style="color: #64748b; font-weight: 400;"> — roughly: total feedback &lt; total damping</span>
+    (coupling + adjustment)² &lt; (baseline recovery rate)²
+    <span style="color: #64748b; font-weight: 400;"> — roughly: total feedback &lt; baseline recovery strength</span>
   </p>
   <p style="margin: 0; font-size: 0.92rem; color: #64748b; line-height: 1.5;">
-    👉 <strong>In simple terms:</strong> you affect each other, but not more than you can stabilize and adjust
+    👉 <strong>In simple terms:</strong> you affect each other, but not more than you can recover to baseline and adjust
   </p>
 </div>
 """,
