@@ -6,19 +6,25 @@ Run locally:
   uv run streamlit run streamlit_app.py
 
 Deploy: connect this repo to https://streamlit.io/cloud and set main file to streamlit_app.py.
+
+Sliders sit above the plots (like the desktop Matplotlib layout). Bowl views use Plotly and
+auto-loop via ``st.fragment(run_every=...)`` because Matplotlib ``FuncAnimation`` does not run
+inside Streamlit reruns and Plotly’s built-in animate does not loop reliably.
 """
 
 from __future__ import annotations
 
+import math
 import os
+import random
+from datetime import timedelta
 
 # Headless matplotlib before pyplot import (required on servers and Streamlit Cloud).
 os.environ.setdefault("MPLBACKEND", "Agg")
 
-import random
-
 import matplotlib.pyplot as plt
 import numpy as np
+import plotly.graph_objects as go
 import streamlit as st
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
@@ -39,7 +45,7 @@ st.set_page_config(
     page_title="Love control model",
     page_icon="💞",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -134,56 +140,318 @@ def _render_slider(key: str) -> None:
         )
 
 
+def _orbit_camera(jj: float, *, r: float = 2.15, el_deg: float = 22.0) -> dict:
+    """Match desktop GUI orbit: azim ≈ 45 + 0.28 * frame_index."""
+    az = math.radians(45.0 + 0.28 * jj)
+    el = math.radians(el_deg)
+    x = r * math.cos(el) * math.cos(az)
+    y = r * math.cos(el) * math.sin(az)
+    z = r * math.sin(el) + 0.25
+    return dict(eye=dict(x=x, y=y, z=z), center=dict(x=0.0, y=0.0, z=0.12), up=dict(x=0, y=0, z=1))
+
+
+def _animation_j_indices(n: int, max_frames: int = 120) -> list[int]:
+    if n <= 0:
+        return [0]
+    frame_step = max(1, n // max_frames)
+    j_list = list(range(0, max(n - 1, 1), frame_step))
+    if j_list[-1] != n - 1:
+        j_list.append(n - 1)
+    return j_list
+
+
+def _bowl_plotly_static(
+    xa: np.ndarray,
+    ya: np.ndarray,
+    za: np.ndarray,
+    xb: np.ndarray,
+    yb: np.ndarray,
+    zb: np.ndarray,
+    Xb: np.ndarray,
+    Yb: np.ndarray,
+    Zb: np.ndarray,
+    r_max: float,
+    z_hi: float,
+    j: int,
+    camera_step: float,
+) -> tuple[go.Figure, go.Figure]:
+    n = len(xa)
+    j = min(max(j, 0), max(n - 1, 0))
+
+    surface = go.Surface(
+        x=Xb,
+        y=Yb,
+        z=Zb,
+        opacity=0.42,
+        showscale=False,
+        colorscale=[[0, "#d8d8d8"], [1, "#c0c0c0"]],
+        hoverinfo="skip",
+    )
+    traces_3d = [
+        go.Scatter3d(
+            x=xa[: j + 1],
+            y=ya[: j + 1],
+            z=za[: j + 1],
+            mode="lines",
+            line=dict(color="#1f77b4", width=5),
+            name="A trail",
+            showlegend=False,
+        ),
+        go.Scatter3d(
+            x=xb[: j + 1],
+            y=yb[: j + 1],
+            z=zb[: j + 1],
+            mode="lines",
+            line=dict(color="#ff7f0e", width=5),
+            name="B trail",
+            showlegend=False,
+        ),
+        go.Scatter3d(
+            x=[xa[j]],
+            y=[ya[j]],
+            z=[za[j]],
+            mode="markers",
+            marker=dict(size=8, color="#1f77b4"),
+            name="A",
+            showlegend=True,
+        ),
+        go.Scatter3d(
+            x=[xb[j]],
+            y=[yb[j]],
+            z=[zb[j]],
+            mode="markers",
+            marker=dict(size=8, color="#ff7f0e"),
+            name="B",
+            showlegend=True,
+        ),
+    ]
+    fig3d = go.Figure(
+        data=[surface, *traces_3d],
+        layout=go.Layout(
+            title="Bowl (3D) — auto-looping",
+            scene=dict(
+                xaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
+                yaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
+                zaxis=dict(range=[0, z_hi], backgroundcolor="#fafafa"),
+                aspectmode="cube",
+                camera=_orbit_camera(camera_step),
+            ),
+            margin=dict(l=0, r=0, t=56, b=20),
+            height=460,
+        ),
+    )
+
+    th = np.linspace(0, 2 * np.pi, 200)
+    boundary = go.Scatter(
+        x=r_max * np.cos(th),
+        y=r_max * np.sin(th),
+        mode="lines",
+        line=dict(color="gray", dash="dash"),
+        name="rim",
+        showlegend=False,
+        hoverinfo="skip",
+    )
+    traces_2d = [
+        go.Scatter(
+            x=xa[: j + 1],
+            y=ya[: j + 1],
+            mode="lines",
+            line=dict(color="#1f77b4", width=3),
+            name="A trail",
+            showlegend=False,
+        ),
+        go.Scatter(
+            x=xb[: j + 1],
+            y=yb[: j + 1],
+            mode="lines",
+            line=dict(color="#ff7f0e", width=3),
+            name="B trail",
+            showlegend=False,
+        ),
+        go.Scatter(
+            x=[xa[j]],
+            y=[ya[j]],
+            mode="markers",
+            marker=dict(size=11, color="#1f77b4"),
+            name="A",
+            showlegend=True,
+        ),
+        go.Scatter(
+            x=[xb[j]],
+            y=[yb[j]],
+            mode="markers",
+            marker=dict(size=11, color="#ff7f0e"),
+            name="B",
+            showlegend=True,
+        ),
+    ]
+    fig2d = go.Figure(
+        data=[boundary, *traces_2d],
+        layout=go.Layout(
+            title="Bowl plan (2D) — auto-looping",
+            xaxis=dict(range=[-r_max, r_max], scaleanchor="y", scaleratio=1),
+            yaxis=dict(range=[-r_max, r_max]),
+            height=460,
+            margin=dict(l=0, r=0, t=56, b=20),
+        ),
+    )
+    return fig3d, fig2d
+
+
+# Interval for bowl auto-advance (fragment rerun). Slower = lighter CPU on Streamlit Cloud.
+_BOWL_ANIM_MS = 70
+
+
+@st.fragment(run_every=timedelta(milliseconds=_BOWL_ANIM_MS))
+def _bowl_auto_loop_fragment() -> None:
+    pl = st.session_state.get("bowl_animation_payload")
+    if not pl:
+        return
+    j_list: list[int] = pl["j_list"]
+    n_fr = len(j_list)
+    if n_fr == 0:
+        return
+    idx = int(st.session_state.get("_bowl_anim_idx", 0)) % n_fr
+    j = j_list[idx]
+    fig3d, fig2d = _bowl_plotly_static(
+        pl["xa"],
+        pl["ya"],
+        pl["za"],
+        pl["xb"],
+        pl["yb"],
+        pl["zb"],
+        pl["Xb"],
+        pl["Yb"],
+        pl["Zb"],
+        pl["r_max"],
+        pl["z_hi"],
+        j,
+        float(idx),
+    )
+    st.session_state._bowl_anim_idx = idx + 1
+    c1, c2 = st.columns(2)
+    with c1:
+        st.plotly_chart(fig3d, width="stretch", key="bowl_3d_loop")
+    with c2:
+        st.plotly_chart(fig2d, width="stretch", key="bowl_2d_loop")
+
+
+def _onboarding_card() -> None:
+    st.markdown(
+        """
+<div style="
+  background: linear-gradient(145deg, #fffbf5 0%, #fff4e6 55%, #ffe8f0 100%);
+  border: 1px solid rgba(230, 180, 120, 0.35);
+  border-radius: 16px;
+  padding: 1.35rem 1.6rem 1.45rem 1.6rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 12px rgba(80, 40, 40, 0.06);
+">
+  <p style="margin: 0 0 0.5rem 0; font-size: 1.35rem; font-weight: 700; color: #3d2a20; letter-spacing: -0.02em;">
+    💛 Relationships as a Coupled System
+  </p>
+  <p style="margin: 0 0 1rem 0; font-size: 1.05rem; color: #5c4338; line-height: 1.5;">
+    Two people continuously shaping each other.
+  </p>
+  <p style="margin: 0 0 1rem 0; font-size: 1rem; color: #4a362c; line-height: 1.65;">
+    <span style="font-weight: 600;">You react</span><br/>
+    <span style="font-weight: 600;">You reinforce</span><br/>
+    <span style="font-weight: 600;">You drift</span>
+  </p>
+  <p style="margin: 0; font-size: 1.02rem; color: #5c4338; line-height: 1.55;">
+    Turn the knobs —<br/>
+    see when connection holds, loops, or breaks
+  </p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     _init_session()
 
-    st.title("Two-agent love control model")
-    st.markdown(
-        "Coupled emotional states with decay, partner coupling, rewards, setpoint tracking, "
-        "delay, and noise. Sliders show **% of each control’s range** in the label. "
-        "Some **stable presets** also set hidden simulation fields (initial state, shocks) "
-        "so trajectories can sit near the dashed setpoints; adjusting any slider clears those overrides."
-    )
+    _onboarding_card()
 
-    with st.sidebar:
-        st.header("Presets & reset")
-        if st.button("Reset to defaults", use_container_width=True):
+    st.subheader("Presets")
+    b1, b2, b3, b4 = st.columns([1, 1, 1, 2])
+    with b1:
+        if st.button("Reset to defaults", width="stretch"):
             _reset_defaults()
             st.session_state.pop("last_preset", None)
             st.rerun()
-        if st.button("Stable (random)", use_container_width=True):
+    with b2:
+        if st.button("Stable (random)", width="stretch"):
             name, m = random.choice(STABLE_PRESETS)
             _apply_preset(m)
             st.session_state.last_preset = f"Stable: {name}"
             st.rerun()
-        if st.button("Unstable (random)", use_container_width=True):
+    with b3:
+        if st.button("Unstable (random)", width="stretch"):
             name, m = random.choice(UNSTABLE_PRESETS)
             _apply_preset(m)
             st.session_state.last_preset = f"Unstable: {name}"
             st.rerun()
+    with b4:
         if st.session_state.get("last_preset"):
             st.caption(st.session_state.last_preset)
         if st.session_state.get("sim_extras"):
-            st.caption("Simulation overrides active (from last preset); change any slider to clear.")
+            st.caption("Preset simulation overrides active; change any slider to clear.")
 
-        st.divider()
-        st.header("Person 1 (A)")
+    st.subheader("Parameters")
+    ca, cb = st.columns(2, gap="large")
+    with ca:
+        st.markdown("**Person 1 (A)**")
         for key in ("a1", "b1", "k1", "K1", "tau1", "sigma1", "x1*"):
             _render_slider(key)
-
-        st.divider()
-        st.header("Person 2 (B)")
+    with cb:
+        st.markdown("**Person 2 (B)**")
         for key in ("a2", "b2", "k2", "K2", "tau2", "sigma2", "x2*"):
             _render_slider(key)
 
-        st.divider()
-        st.header("Shared")
+    st.markdown("**Shared**")
+    s1, s2 = st.columns(2)
+    with s1:
         _render_slider("sat")
+    with s2:
         _render_slider("seed")
+
+    st.divider()
 
     p = _params_from_ui()
     t, x1, x2, *_ = simulate(p)
     regime = classify_regime(x1, x2)
+
+    r_max = 2.8
+    Xb, Yb, Zb, k_parabola = bowl_surface_mesh(r_max=r_max)
+    xa, ya, xb, yb = coupled_bowl_paths(x1, x2)
+    za = k_parabola * (xa**2 + ya**2)
+    zb = k_parabola * (xb**2 + yb**2)
+    z_hi = float(np.nanmax(Zb)) * 1.05
+    z_hi = max(z_hi, 0.5)
+
+    j_list = _animation_j_indices(len(xa))
+    st.session_state.bowl_animation_payload = {
+        "xa": xa,
+        "ya": ya,
+        "za": za,
+        "xb": xb,
+        "yb": yb,
+        "zb": zb,
+        "Xb": Xb,
+        "Yb": Yb,
+        "Zb": Zb,
+        "r_max": r_max,
+        "z_hi": float(z_hi),
+        "j_list": j_list,
+    }
+    st.session_state._bowl_anim_idx = 0
+
+    st.subheader("Bowl trajectories (auto-loop)")
+    st.caption(
+        "Starts automatically and repeats. Orbit matches the desktop GUI; timing is driven by Streamlit’s fragment scheduler."
+    )
+    _bowl_auto_loop_fragment()
 
     st.subheader(f"Emotional states — {regime}")
     fig1, ax1 = plt.subplots(figsize=(11, 3.2))
@@ -198,51 +466,6 @@ def main() -> None:
     fig1.tight_layout()
     st.pyplot(fig1, clear_figure=True)
     plt.close(fig1)
-
-    r_max = 2.8
-    Xb, Yb, Zb, k_parabola = bowl_surface_mesh(r_max=r_max)
-    xa, ya, xb, yb = coupled_bowl_paths(x1, x2)
-    za = k_parabola * (xa**2 + ya**2)
-    zb = k_parabola * (xb**2 + yb**2)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.caption("Bowl — 3D (end of run)")
-        fig2 = plt.figure(figsize=(5.5, 4.5))
-        ax3 = fig2.add_subplot(111, projection="3d")
-        ax3.plot_surface(Xb, Yb, Zb, color="0.88", edgecolor="none", alpha=0.45, rstride=2, cstride=2)
-        ax3.plot(xa, ya, za, color="C0", lw=1.0, alpha=0.85, label="A")
-        ax3.plot(xb, yb, zb, color="C1", lw=1.0, alpha=0.85, label="B")
-        ax3.scatter([xa[-1]], [ya[-1]], [za[-1]], color="C0", s=50)
-        ax3.scatter([xb[-1]], [yb[-1]], [zb[-1]], color="C1", s=50)
-        ax3.set_xlim(-r_max, r_max)
-        ax3.set_ylim(-r_max, r_max)
-        z_hi = float(np.nanmax(Zb)) * 1.05
-        ax3.set_zlim(0, max(z_hi, 0.5))
-        ax3.set_title("Bowl (3D)")
-        ax3.legend(fontsize=7)
-        fig2.tight_layout()
-        st.pyplot(fig2, clear_figure=True)
-        plt.close(fig2)
-
-    with c2:
-        st.caption("Bowl — plan view")
-        fig3, axp = plt.subplots(figsize=(5.5, 5))
-        th = np.linspace(0, 2 * np.pi, 200)
-        axp.plot(r_max * np.cos(th), r_max * np.sin(th), "k--", alpha=0.25, lw=1)
-        axp.plot(xa, ya, color="C0", lw=1.0, alpha=0.85, label="A")
-        axp.plot(xb, yb, color="C1", lw=1.0, alpha=0.85, label="B")
-        axp.scatter([xa[-1]], [ya[-1]], color="C0", s=45, zorder=5)
-        axp.scatter([xb[-1]], [yb[-1]], color="C1", s=45, zorder=5)
-        axp.set_aspect("equal")
-        axp.set_xlim(-r_max, r_max)
-        axp.set_ylim(-r_max, r_max)
-        axp.set_title("Bowl plan (2D)")
-        axp.grid(True, alpha=0.3)
-        axp.legend(fontsize=8)
-        fig3.tight_layout()
-        st.pyplot(fig3, clear_figure=True)
-        plt.close(fig3)
 
 
 if __name__ == "__main__":
