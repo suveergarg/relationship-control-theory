@@ -26,6 +26,7 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
@@ -162,7 +163,7 @@ def _animation_j_indices(n: int, max_frames: int = 120) -> list[int]:
     return j_list
 
 
-def _bowl_plotly_static(
+def _bowl_plotly_figure(
     xa: np.ndarray,
     ya: np.ndarray,
     za: np.ndarray,
@@ -176,7 +177,7 @@ def _bowl_plotly_static(
     z_hi: float,
     j: int,
     camera_step: float,
-) -> tuple[go.Figure, go.Figure]:
+) -> go.Figure:
     n = len(xa)
     j = min(max(j, 0), max(n - 1, 0))
 
@@ -227,22 +228,6 @@ def _bowl_plotly_static(
             showlegend=True,
         ),
     ]
-    fig3d = go.Figure(
-        data=[surface, *traces_3d],
-        layout=go.Layout(
-            title="Bowl (3D) — auto-looping",
-            scene=dict(
-                xaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
-                yaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
-                zaxis=dict(range=[0, z_hi], backgroundcolor="#fafafa"),
-                aspectmode="cube",
-                camera=_orbit_camera(camera_step),
-            ),
-            margin=dict(l=0, r=0, t=56, b=20),
-            height=460,
-        ),
-    )
-
     th = np.linspace(0, 2 * np.pi, 200)
     boundary = go.Scatter(
         x=r_max * np.cos(th),
@@ -287,21 +272,46 @@ def _bowl_plotly_static(
             showlegend=True,
         ),
     ]
-    fig2d = go.Figure(
-        data=[boundary, *traces_2d],
-        layout=go.Layout(
-            title="Bowl plan (2D) — auto-looping",
-            xaxis=dict(range=[-r_max, r_max], scaleanchor="y", scaleratio=1),
-            yaxis=dict(range=[-r_max, r_max]),
-            height=460,
-            margin=dict(l=0, r=0, t=56, b=20),
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        specs=[[{"type": "scatter3d"}, {"type": "scatter"}]],
+        column_widths=[0.52, 0.48],
+        horizontal_spacing=0.05,
+        subplot_titles=("Bowl (3D) — auto-looping", "Bowl plan (2D) — auto-looping"),
+    )
+    fig.add_trace(surface, row=1, col=1)
+    for tr in traces_3d:
+        fig.add_trace(tr, row=1, col=1)
+    for tr in [boundary, *traces_2d]:
+        fig.add_trace(tr, row=1, col=2)
+
+    cam = _orbit_camera(camera_step)
+    fig.update_layout(
+        height=480,
+        margin=dict(l=0, r=0, t=56, b=24),
+        paper_bgcolor="#ffffff",
+        showlegend=True,
+        legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.7)", borderwidth=0),
+    )
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
+            yaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
+            zaxis=dict(range=[0, z_hi], backgroundcolor="#fafafa"),
+            aspectmode="cube",
+            camera=cam,
         ),
     )
-    return fig3d, fig2d
+    fig.update_xaxes(range=[-r_max, r_max], row=1, col=2, scaleanchor="y", scaleratio=1)
+    fig.update_yaxes(range=[-r_max, r_max], row=1, col=2)
+    fig.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)", row=1, col=2)
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)", row=1, col=2)
+    return fig
 
 
-# Interval for bowl auto-advance (fragment rerun). Slower = lighter CPU on Streamlit Cloud.
-_BOWL_ANIM_MS = 70
+# Interval for bowl auto-advance (fragment rerun). Slower = lighter CPU and less visible flicker.
+_BOWL_ANIM_MS = 90
 
 
 @st.fragment(run_every=timedelta(milliseconds=_BOWL_ANIM_MS))
@@ -315,7 +325,7 @@ def _bowl_auto_loop_fragment() -> None:
         return
     idx = int(st.session_state.get("_bowl_anim_idx", 0)) % n_fr
     j = j_list[idx]
-    fig3d, fig2d = _bowl_plotly_static(
+    fig = _bowl_plotly_figure(
         pl["xa"],
         pl["ya"],
         pl["za"],
@@ -331,11 +341,14 @@ def _bowl_auto_loop_fragment() -> None:
         float(idx),
     )
     st.session_state._bowl_anim_idx = idx + 1
-    c1, c2 = st.columns(2)
-    with c1:
-        st.plotly_chart(fig3d, width="stretch", key="bowl_3d_loop")
-    with c2:
-        st.plotly_chart(fig2d, width="stretch", key="bowl_2d_loop")
+    # Single figure = one Streamlit chart update per frame (reduces Plotly flicker vs two charts).
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        key="bowl_auto_loop",
+        theme=None,
+        config={"displayModeBar": False},
+    )
 
 
 def _onboarding_card() -> None:
@@ -373,6 +386,159 @@ def _onboarding_card() -> None:
 def _coupled_system_diagram() -> None:
     if _COUPLED_SYSTEM_DIAGRAM_SVG.is_file():
         st.image(str(_COUPLED_SYSTEM_DIAGRAM_SVG), width="stretch")
+
+
+def _attachment_theory_section() -> None:
+    st.divider()
+    st.markdown(
+        """
+<div style="
+  background: linear-gradient(160deg, #f8fafc 0%, #f1f5f9 45%, #fefce8 100%);
+  border: 1px solid rgba(100, 120, 140, 0.2);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem 1.3rem 1.4rem;
+  margin-top: 0.5rem;
+  box-shadow: 0 2px 10px rgba(30, 40, 60, 0.05);
+">
+  <p style="margin: 0 0 0.85rem 0; font-size: 1.2rem; font-weight: 700; color: #1e293b;">
+    Attachment theory analysis
+  </p>
+  <p style="margin: 0 0 1rem 0; font-size: 1.05rem; color: #334155; line-height: 1.55;">
+    💡 <strong>Healthy relationships are not zero-feedback — they are well-tuned feedback systems</strong>
+  </p>
+  <p style="margin: 0 0 1.1rem 0; font-size: 0.98rem; color: #475569; line-height: 1.55;">
+    What you explored with sliders maps to attachment styles as regions in the system:
+  </p>
+
+  <div style="margin-bottom: 1rem;">
+    <p style="margin: 0 0 0.35rem 0; font-weight: 700; color: #0f172a;">❤️ Secure</p>
+    <p style="margin: 0 0 0.25rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
+      Moderate influence + reward, good damping<br/>
+      Low delay, low noise<br/>
+      System converges smoothly
+    </p>
+    <p style="margin: 0; font-size: 0.92rem; color: #64748b;">👉 Stable, responsive, easy repair</p>
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <p style="margin: 0 0 0.35rem 0; font-weight: 700; color: #0f172a;">🔥 Anxious</p>
+    <p style="margin: 0 0 0.25rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
+      High influence + high reward<br/>
+      Low damping (needs constant input)<br/>
+      System overshoots / oscillates
+    </p>
+    <p style="margin: 0; font-size: 0.92rem; color: #64748b;">👉 Intense, reactive, amplification loops</p>
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <p style="margin: 0 0 0.35rem 0; font-weight: 700; color: #0f172a;">🧊 Avoidant</p>
+    <p style="margin: 0 0 0.25rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
+      Low influence + low reward<br/>
+      High self-stability<br/>
+      Weak coupling
+    </p>
+    <p style="margin: 0; font-size: 0.92rem; color: #64748b;">👉 Calm but distant, low emotional exchange</p>
+  </div>
+
+  <div style="margin-bottom: 0;">
+    <p style="margin: 0 0 0.35rem 0; font-weight: 700; color: #0f172a;">🎢 Anxious–Avoidant</p>
+    <p style="margin: 0 0 0.25rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
+      Asymmetric gains + delays<br/>
+      One pushes, one withdraws<br/>
+      System cycles instead of settling
+    </p>
+    <p style="margin: 0; font-size: 0.92rem; color: #64748b;">👉 Push–pull, unstable, repeating patterns</p>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _stability_eigenview_section() -> None:
+    st.markdown(
+        """
+<div style="
+  background: linear-gradient(165deg, #f0f9ff 0%, #ecfeff 40%, #f5f3ff 100%);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem 1.3rem 1.4rem;
+  margin-top: 1rem;
+  box-shadow: 0 2px 10px rgba(30, 58, 90, 0.06);
+">
+  <p style="margin: 0 0 0.85rem 0; font-size: 1.2rem; font-weight: 700; color: #0c4a6e;">
+    📐 Stability (Eigenview)
+  </p>
+  <p style="margin: 0 0 0.75rem 0; font-size: 0.98rem; color: #334155; line-height: 1.55;">
+    The system’s behavior is determined by its <strong>eigenvalues</strong>.
+  </p>
+  <p style="margin: 0 0 1rem 0; font-size: 0.95rem; color: #475569; line-height: 1.55;">
+    <strong>Negative</strong> → states decay → stable<br/>
+    <strong>Positive</strong> → states grow → unstable<br/>
+    <strong>Complex</strong> → oscillations (cycles)
+  </p>
+  <p style="margin: 0 0 0.65rem 0; font-size: 0.98rem; color: #334155; line-height: 1.5;">
+    The key balance is:
+  </p>
+  <p style="margin: 0 0 1rem 0; font-size: 0.95rem; color: #475569; line-height: 1.55;">
+    <strong>mutual coupling</strong> vs <strong>self-damping</strong> vs <strong>adjustment</strong>
+  </p>
+  <p style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #475569; line-height: 1.55;">
+    <strong>Coupling</strong> = influence + reward<br/>
+    <strong>Adjustment</strong> = how actively you correct toward your needs<br/>
+    <strong>Damping</strong> = how well you stabilize yourself
+  </p>
+  <p style="margin: 0 0 0.5rem 0; font-size: 0.92rem; color: #0369a1; line-height: 1.5;">
+    👉 <strong>Stability condition (core):</strong><br/>
+    (coupling + adjustment)² &lt; (self-damping)²
+    <span style="color: #64748b; font-weight: 400;"> — roughly: total feedback &lt; total damping</span>
+  </p>
+  <p style="margin: 0; font-size: 0.92rem; color: #64748b; line-height: 1.5;">
+    👉 <strong>In simple terms:</strong> you affect each other, but not more than you can stabilize and adjust
+  </p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _limitations_section() -> None:
+    st.markdown(
+        """
+<div style="
+  background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 35%, #ffedd5 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem 1.3rem 1.4rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 2px 10px rgba(120, 80, 20, 0.06);
+">
+  <p style="margin: 0 0 0.85rem 0; font-size: 1.2rem; font-weight: 700; color: #78350f;">
+    ⚠️ Limitations
+  </p>
+  <p style="margin: 0 0 1rem 0; font-size: 0.98rem; color: #44403c; line-height: 1.55;">
+    Humans are <strong>far more complex systems</strong> than this model.
+  </p>
+  <p style="margin: 0 0 0.45rem 0; font-size: 0.95rem; color: #57534e; line-height: 1.55;">
+    We have <strong>memory</strong> — history shapes present behavior<br/>
+    We carry <strong>meaning and context</strong> — the same signal can feel different<br/>
+    We have <strong>intentions and values</strong> — not everything is reactive<br/>
+    We are <strong>nonlinear and discontinuous</strong> — not smooth signals<br/>
+    We <strong>change over time</strong> — our “parameters” evolve
+  </p>
+  <p style="margin: 0.85rem 0 0.4rem 0; font-size: 0.98rem; color: #44403c; line-height: 1.5;">
+    We are also <strong>not isolated</strong> — we are coupled to many systems:
+  </p>
+  <p style="margin: 0; font-size: 0.95rem; color: #57534e; line-height: 1.55;">
+    our past selves<br/>
+    our environments<br/>
+    other relationships
+  </p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def main() -> None:
@@ -453,7 +619,8 @@ def main() -> None:
 
     st.subheader("Bowl trajectories (auto-loop)")
     st.caption(
-        "Starts automatically and repeats. Orbit matches the desktop GUI; timing is driven by Streamlit’s fragment scheduler."
+        "Starts automatically and repeats. 3D and plan views share one chart (smoother than two) "
+        "with the same orbit as the desktop GUI; timing uses Streamlit’s fragment scheduler."
     )
     _bowl_auto_loop_fragment()
 
@@ -470,6 +637,10 @@ def main() -> None:
     fig1.tight_layout()
     st.pyplot(fig1, clear_figure=True)
     plt.close(fig1)
+
+    _attachment_theory_section()
+    _stability_eigenview_section()
+    _limitations_section()
 
 
 if __name__ == "__main__":
