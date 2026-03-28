@@ -201,17 +201,19 @@ def interactive_dashboard():
     t, x1, x2, *_ = simulate(params)
     r_max = 2.8
 
-    fig = plt.figure(figsize=(12, 11.0))
+    fig = plt.figure(figsize=(12, 12.0))
+    fig.patch.set_facecolor("0.97")
     try:
         fig.canvas.manager.set_window_title("Love control — desktop GUI")
     except Exception:
         pass
 
-    h_sl = 0.016
-    v_step = 0.026
-    y0 = 0.962
-    x_a, w_a = 0.06, 0.40
-    x_b, w_b = 0.54, 0.40
+    # Slider rows: enough pitch so labels/tracks do not overlap; headers sit above row 0.
+    h_sl = 0.020
+    v_step = 0.034
+    y0 = 0.898
+    x_a, w_a = 0.07, 0.38
+    x_b, w_b = 0.55, 0.38
 
     p1 = [
         ("a1", 0.0, 2.5, params.a1),
@@ -238,21 +240,46 @@ def interactive_dashboard():
     for i, (name, lo, hi, v0) in enumerate(p2):
         slider_specs.append((name, lo, hi, v0, [x_b, y0 - i * v_step, w_b, h_sl]))
 
-    y_shared = y0 - 7 * v_step - 0.010
-    slider_specs.append(("sat", 0.1, 3.0, params.sat_alpha, [0.10, y_shared, 0.35, h_sl]))
-    slider_specs.append(("seed", 0, 100, params.seed, [0.55, y_shared, 0.35, h_sl]))
+    y_shared = y0 - 7 * v_step - 0.022
+    slider_specs.append(("sat", 0.1, 3.0, params.sat_alpha, [0.12, y_shared, 0.32, h_sl]))
+    slider_specs.append(("seed", 0, 100, params.seed, [0.56, y_shared, 0.32, h_sl]))
 
-    fig.text(0.26, 0.993, "Person 1 (A)", ha="center", fontsize=11, fontweight="bold")
-    fig.text(0.74, 0.993, "Person 2 (B)", ha="center", fontsize=11, fontweight="bold")
-    fig.text(0.50, y_shared + 0.024, "Shared", ha="center", fontsize=9, style="italic", alpha=0.85)
+    fig.text(
+        0.26,
+        0.978,
+        "Person 1 (A)",
+        ha="center",
+        fontsize=11,
+        fontweight="bold",
+        color="0.1",
+    )
+    fig.text(
+        0.74,
+        0.978,
+        "Person 2 (B)",
+        ha="center",
+        fontsize=11,
+        fontweight="bold",
+        color="0.1",
+    )
+    y_shared_lbl = y_shared + h_sl + 0.018
+    fig.text(
+        0.50,
+        y_shared_lbl,
+        "Shared",
+        ha="center",
+        fontsize=9,
+        style="italic",
+        color="0.25",
+    )
 
-    bowl_bottom = 0.07
-    bowl_h = 0.33
+    bowl_bottom = 0.06
+    bowl_h = 0.30
     bowl_top = bowl_bottom + bowl_h
 
-    gap = 0.018
-    state_bottom = bowl_top + gap
-    state_h = 0.24
+    gap_mid = 0.028
+    state_h = 0.21
+    state_bottom = bowl_top + gap_mid
     state_top = state_bottom + state_h
 
     ax_state = fig.add_axes([0.10, state_bottom, 0.82, state_h])
@@ -261,19 +288,27 @@ def interactive_dashboard():
     line_x2, = ax_state.plot(t, x2, label="x2: Person B")
     line_x1s = ax_state.axhline(params.x1_star, linestyle="--", alpha=0.7, label="A setpoint")
     line_x2s = ax_state.axhline(params.x2_star, linestyle=":", alpha=0.7, label="B setpoint")
-    title_state = ax_state.set_title(f"Emotional states ({classify_regime(x1, x2)})")
+    title_state = ax_state.set_title(
+        f"Emotional states — {classify_regime(x1, x2)}",
+        fontsize=10,
+        pad=8,
+    )
     ax_state.set_xlabel("Time")
     ax_state.set_ylabel("State")
+    ax_state.tick_params(axis="both", labelsize=8)
     ax_state.grid(True, alpha=0.3)
-    ax_state.legend(loc="upper right", fontsize=8)
+    ax_state.legend(loc="lower left", fontsize=7, framealpha=0.92)
 
+    hint_y = (state_top + y_shared + h_sl) / 2
     fig.text(
         0.50,
-        state_top + 0.012,
-        "Sliders control both emotional states and bowl",
+        hint_y,
+        "Sliders control both plots below",
         ha="center",
-        fontsize=9,
-        alpha=0.75,
+        va="center",
+        fontsize=8,
+        color="0.35",
+        linespacing=1.2,
     )
 
     Xb, Yb, Zb, k_parabola = bowl_surface_mesh(r_max=r_max)
@@ -287,11 +322,12 @@ def interactive_dashboard():
     ax_b3d.set_ylim(-r_max, r_max)
     z_hi = float(np.nanmax(Zb)) * 1.05
     ax_b3d.set_zlim(0, max(z_hi, 0.5))
-    ax_b3d.set_title("Bowl — 3D")
-    ax_b3d.set_xlabel("x")
-    ax_b3d.set_ylabel("y")
-    ax_b3d.set_zlabel("z")
-    ax_b3d.legend(loc="upper left", fontsize=7)
+    ax_b3d.set_title("Bowl (3D)", fontsize=9, pad=2)
+    ax_b3d.set_xlabel("x", fontsize=8, labelpad=0)
+    ax_b3d.set_ylabel("y", fontsize=8, labelpad=0)
+    ax_b3d.set_zlabel("z", fontsize=8, labelpad=2)
+    ax_b3d.tick_params(labelsize=7)
+    ax_b3d.legend(loc="lower left", fontsize=6, framealpha=0.9)
 
     ax_bplan = fig.add_axes([0.54, bowl_bottom, 0.40, bowl_h])
     th = np.linspace(0, 2 * np.pi, 200)
@@ -303,11 +339,12 @@ def interactive_dashboard():
     ax_bplan.set_aspect("equal")
     ax_bplan.set_xlim(-r_max, r_max)
     ax_bplan.set_ylim(-r_max, r_max)
-    ax_bplan.set_title("Bowl — plan (2D)")
-    ax_bplan.set_xlabel("x")
-    ax_bplan.set_ylabel("y")
+    ax_bplan.set_title("Bowl plan (2D)", fontsize=9, pad=6)
+    ax_bplan.set_xlabel("x", fontsize=8)
+    ax_bplan.set_ylabel("y", fontsize=8)
+    ax_bplan.tick_params(labelsize=7)
     ax_bplan.grid(True, alpha=0.3)
-    ax_bplan.legend(fontsize=7)
+    ax_bplan.legend(loc="lower left", fontsize=6, framealpha=0.9)
 
     bowl_anim_holder: dict = {"anim": None}
 
@@ -365,9 +402,10 @@ def interactive_dashboard():
         valfmt = "%0.0f" if name == "seed" else "%1.2f"
         sliders[name] = Slider(ax=sax, label=name, valmin=vmin, valmax=vmax, valinit=vinit, valfmt=valfmt)
 
-    reset_ax = fig.add_axes([0.62, state_bottom - 0.002, 0.10, 0.034])
+    btn_h, btn_y = 0.034, 0.012
+    reset_ax = fig.add_axes([0.28, btn_y, 0.20, btn_h])
     reset_button = Button(reset_ax, "Reset")
-    unstable_ax = fig.add_axes([0.74, state_bottom - 0.002, 0.14, 0.034])
+    unstable_ax = fig.add_axes([0.52, btn_y, 0.26, btn_h])
     unstable_button = Button(unstable_ax, "Unstable preset")
 
     UNSTABLE_PRESET = {
@@ -442,7 +480,7 @@ def interactive_dashboard():
         ax_state.relim()
         ax_state.autoscale_view()
 
-        title_state.set_text(f"Emotional states ({classify_regime(x1n, x2n)})")
+        title_state.set_text(f"Emotional states — {classify_regime(x1n, x2n)}")
         fig.canvas.draw_idle()
         fig.canvas.flush_events()
 
