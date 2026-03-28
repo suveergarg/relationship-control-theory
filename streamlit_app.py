@@ -2,7 +2,7 @@
 Love control system — Streamlit UI (local or Streamlit Community Cloud).
 
 Run locally:
-  uv sync --extra streamlit
+  uv sync
   uv run streamlit run streamlit_app.py
 
 Deploy: connect this repo to https://streamlit.io/cloud and set main file to streamlit_app.py.

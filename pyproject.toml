@@ -9,13 +9,13 @@ dependencies = [
     "ipympl>=0.9.3",
     "numpy>=1.26",
     "matplotlib>=3.8",
+    # In main deps so Streamlit Community Cloud’s plain `uv sync` installs them
+    # (Cloud does not pass `--extra streamlit`).
+    "streamlit>=1.28",
+    "plotly>=5.18",
 ]
 
 [project.optional-dependencies]
 gui = [
     "PySide6>=6.5",
-]
-streamlit = [
-    "streamlit>=1.28",
-    "plotly>=5.18",
 ]

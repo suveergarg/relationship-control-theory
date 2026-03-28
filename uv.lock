@@ -535,15 +535,13 @@ dependencies = [
     { name = "jupyter" },
     { name = "matplotlib" },
     { name = "numpy" },
+    { name = "plotly" },
+    { name = "streamlit" },
 ]
 
 [package.optional-dependencies]
 gui = [
     { name = "pyside6" },
-]
-streamlit = [
-    { name = "plotly" },
-    { name = "streamlit" },
 ]
 
 [package.metadata]
@@ -552,11 +550,11 @@ requires-dist = [
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=1.26" },
-    { name = "plotly", marker = "extra == 'streamlit'", specifier = ">=5.18" },
+    { name = "plotly", specifier = ">=5.18" },
     { name = "pyside6", marker = "extra == 'gui'", specifier = ">=6.5" },
-    { name = "streamlit", marker = "extra == 'streamlit'", specifier = ">=1.28" },
+    { name = "streamlit", specifier = ">=1.28" },
 ]
-provides-extras = ["gui", "streamlit"]
+provides-extras = ["gui"]
 
 [[package]]
 name = "fastjsonschema"

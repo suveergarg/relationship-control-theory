@@ -1,5 +1,4 @@
-# For local/CI pip installs and Streamlit Community Cloud.
-# Prefer: uv sync --extra streamlit
+# Fallback for pip / some CI. Streamlit Community Cloud may use uv.lock instead.
 numpy>=1.26
 matplotlib>=3.8
 streamlit>=1.28
