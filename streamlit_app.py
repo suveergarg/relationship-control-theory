@@ -163,6 +163,17 @@ def _animation_j_indices(n: int, max_frames: int = 120) -> list[int]:
     return j_list
 
 
+def _trail_line_indices(j: int, max_points: int) -> np.ndarray:
+    """Uniform subsample of indices 0..j so line traces stay cheap for long simulations."""
+    j = int(j)
+    if j < 0:
+        return np.array([0], dtype=int)
+    n = j + 1
+    if n <= max_points:
+        return np.arange(n, dtype=int)
+    return np.unique(np.linspace(0, j, num=max_points, dtype=int))
+
+
 def _bowl_plotly_figure(
     xa: np.ndarray,
     ya: np.ndarray,
@@ -177,9 +188,12 @@ def _bowl_plotly_figure(
     z_hi: float,
     j: int,
     camera_step: float,
+    *,
+    trail_max_points: int,
 ) -> go.Figure:
     n = len(xa)
     j = min(max(j, 0), max(n - 1, 0))
+    li = _trail_line_indices(j, trail_max_points)
 
     surface = go.Surface(
         x=Xb,
@@ -189,25 +203,28 @@ def _bowl_plotly_figure(
         showscale=False,
         colorscale=[[0, "#d8d8d8"], [1, "#c0c0c0"]],
         hoverinfo="skip",
+        lighting=dict(ambient=0.85, diffuse=0.35, specular=0.2),
     )
     traces_3d = [
         go.Scatter3d(
-            x=xa[: j + 1],
-            y=ya[: j + 1],
-            z=za[: j + 1],
+            x=xa[li],
+            y=ya[li],
+            z=za[li],
             mode="lines",
-            line=dict(color="#1f77b4", width=5),
+            line=dict(color="#1f77b4", width=4),
             name="A trail",
             showlegend=False,
+            hoverinfo="skip",
         ),
         go.Scatter3d(
-            x=xb[: j + 1],
-            y=yb[: j + 1],
-            z=zb[: j + 1],
+            x=xb[li],
+            y=yb[li],
+            z=zb[li],
             mode="lines",
-            line=dict(color="#ff7f0e", width=5),
+            line=dict(color="#ff7f0e", width=4),
             name="B trail",
             showlegend=False,
+            hoverinfo="skip",
         ),
         go.Scatter3d(
             x=[xa[j]],
@@ -216,6 +233,7 @@ def _bowl_plotly_figure(
             mode="markers",
             marker=dict(size=8, color="#1f77b4"),
             showlegend=False,
+            hoverinfo="skip",
         ),
         go.Scatter3d(
             x=[xb[j]],
@@ -224,6 +242,7 @@ def _bowl_plotly_figure(
             mode="markers",
             marker=dict(size=8, color="#ff7f0e"),
             showlegend=False,
+            hoverinfo="skip",
         ),
     ]
     th = np.linspace(0, 2 * np.pi, 200)
@@ -238,20 +257,22 @@ def _bowl_plotly_figure(
     )
     traces_2d = [
         go.Scatter(
-            x=xa[: j + 1],
-            y=ya[: j + 1],
+            x=xa[li],
+            y=ya[li],
             mode="lines",
             line=dict(color="#1f77b4", width=3),
             name="A trail",
             showlegend=False,
+            hoverinfo="skip",
         ),
         go.Scatter(
-            x=xb[: j + 1],
-            y=yb[: j + 1],
+            x=xb[li],
+            y=yb[li],
             mode="lines",
             line=dict(color="#ff7f0e", width=3),
             name="B trail",
             showlegend=False,
+            hoverinfo="skip",
         ),
         go.Scatter(
             x=[xa[j]],
@@ -259,6 +280,7 @@ def _bowl_plotly_figure(
             mode="markers",
             marker=dict(size=11, color="#1f77b4"),
             showlegend=False,
+            hoverinfo="skip",
         ),
         go.Scatter(
             x=[xb[j]],
@@ -266,6 +288,7 @@ def _bowl_plotly_figure(
             mode="markers",
             marker=dict(size=11, color="#ff7f0e"),
             showlegend=False,
+            hoverinfo="skip",
         ),
     ]
     fig = make_subplots(
@@ -311,11 +334,23 @@ def _bowl_plotly_figure(
     return fig
 
 
-# Interval for bowl auto-advance (fragment rerun). Slower = lighter CPU and less visible flicker.
-_BOWL_ANIM_MS = 90
+# Bowl animation: each fragment rerun serializes a full Plotly figure to the browser. Coarser mesh,
+# decimated trails, and a modest interval keep Cloud / mobile usable. Tune via env if needed.
+def _bowl_anim_ms() -> int:
+    return int(os.environ.get("LOVE_BOWL_ANIM_MS", "110"))
 
 
-@st.fragment(run_every=timedelta(milliseconds=_BOWL_ANIM_MS))
+def _bowl_surface_grid_n() -> int:
+    n = int(os.environ.get("LOVE_BOWL_MESH_N", "36"))
+    return max(24, min(n, 72))
+
+
+def _bowl_trail_max_points() -> int:
+    n = int(os.environ.get("LOVE_BOWL_TRAIL_MAX", "420"))
+    return max(32, min(n, 4000))
+
+
+@st.fragment(run_every=timedelta(milliseconds=_bowl_anim_ms()))
 def _bowl_auto_loop_fragment() -> None:
     pl = st.session_state.get("bowl_animation_payload")
     if not pl:
@@ -340,6 +375,7 @@ def _bowl_auto_loop_fragment() -> None:
         pl["z_hi"],
         j,
         float(idx),
+        trail_max_points=int(pl.get("trail_max_points", _bowl_trail_max_points())),
     )
     st.session_state._bowl_anim_idx = idx + 1
     # Single figure = one Streamlit chart update per frame (reduces Plotly flicker vs two charts).
@@ -348,7 +384,11 @@ def _bowl_auto_loop_fragment() -> None:
         width="stretch",
         key="bowl_auto_loop",
         theme=None,
-        config={"displayModeBar": False},
+        config={
+            "displayModeBar": False,
+            # Retina / high-DPI: default 2× GL buffer is expensive for 3D; 1 is usually fine on web.
+            "plotGlPixelRatio": float(os.environ.get("LOVE_BOWL_GL_PIXEL_RATIO", "1")),
+        },
     )
 
 
@@ -593,7 +633,8 @@ def main() -> None:
     regime = classify_regime(x1, x2)
 
     r_max = 2.8
-    Xb, Yb, Zb, k_parabola = bowl_surface_mesh(r_max=r_max)
+    mesh_n = _bowl_surface_grid_n()
+    Xb, Yb, Zb, k_parabola = bowl_surface_mesh(r_max=r_max, n=mesh_n)
     xa, ya, xb, yb = coupled_bowl_paths(x1, x2)
     za = k_parabola * (xa**2 + ya**2)
     zb = k_parabola * (xb**2 + yb**2)
@@ -601,6 +642,7 @@ def main() -> None:
     z_hi = max(z_hi, 0.5)
 
     j_list = _animation_j_indices(len(xa))
+    trail_cap = _bowl_trail_max_points()
     st.session_state.bowl_animation_payload = {
         "xa": xa,
         "ya": ya,
@@ -614,6 +656,7 @@ def main() -> None:
         "r_max": r_max,
         "z_hi": float(z_hi),
         "j_list": j_list,
+        "trail_max_points": trail_cap,
     }
     st.session_state._bowl_anim_idx = 0
 
