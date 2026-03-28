@@ -44,8 +44,7 @@ from love_model import (
 )
 
 st.set_page_config(
-    page_title="Love control model",
-    page_icon="💞",
+    page_title="Relationship control theory",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
