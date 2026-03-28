@@ -215,8 +215,7 @@ def _bowl_plotly_figure(
             z=[za[j]],
             mode="markers",
             marker=dict(size=8, color="#1f77b4"),
-            name="Blue marble — Person A (x₁)",
-            showlegend=True,
+            showlegend=False,
         ),
         go.Scatter3d(
             x=[xb[j]],
@@ -224,8 +223,7 @@ def _bowl_plotly_figure(
             z=[zb[j]],
             mode="markers",
             marker=dict(size=8, color="#ff7f0e"),
-            name="Orange marble — Person B (x₂)",
-            showlegend=True,
+            showlegend=False,
         ),
     ]
     th = np.linspace(0, 2 * np.pi, 200)
@@ -260,7 +258,6 @@ def _bowl_plotly_figure(
             y=[ya[j]],
             mode="markers",
             marker=dict(size=11, color="#1f77b4"),
-            name="Blue marble — Person A (x₁)",
             showlegend=False,
         ),
         go.Scatter(
@@ -268,7 +265,6 @@ def _bowl_plotly_figure(
             y=[yb[j]],
             mode="markers",
             marker=dict(size=11, color="#ff7f0e"),
-            name="Orange marble — Person B (x₂)",
             showlegend=False,
         ),
     ]
@@ -278,7 +274,6 @@ def _bowl_plotly_figure(
         specs=[[{"type": "scatter3d"}, {"type": "scatter"}]],
         column_widths=[0.52, 0.48],
         horizontal_spacing=0.05,
-        subplot_titles=("Bowl (3D)", "Bowl plan (2D)"),
     )
     fig.add_trace(surface, row=1, col=1)
     for tr in traces_3d:
@@ -288,34 +283,31 @@ def _bowl_plotly_figure(
 
     cam = _orbit_camera(camera_step)
     fig.update_layout(
-        height=480,
-        margin=dict(l=0, r=0, t=72, b=24),
+        height=460,
+        margin=dict(l=0, r=0, t=24, b=20),
         paper_bgcolor="#ffffff",
-        showlegend=True,
-        legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.7)", borderwidth=0),
-        title=dict(
-            text="Marbles = the two people on the bowl · blue = Person A (x₁) · orange = Person B (x₂)",
-            x=0.5,
-            xanchor="center",
-            yanchor="top",
-            yref="paper",
-            y=1.0,
-            font=dict(size=12, color="#334155"),
-        ),
+        showlegend=False,
     )
     fig.update_layout(
         scene=dict(
-            xaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
-            yaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa"),
-            zaxis=dict(range=[0, z_hi], backgroundcolor="#fafafa"),
+            xaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa", showticklabels=False),
+            yaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa", showticklabels=False),
+            zaxis=dict(range=[0, z_hi], backgroundcolor="#fafafa", showticklabels=False),
             aspectmode="cube",
             camera=cam,
         ),
     )
-    fig.update_xaxes(range=[-r_max, r_max], row=1, col=2, scaleanchor="y", scaleratio=1)
-    fig.update_yaxes(range=[-r_max, r_max], row=1, col=2)
-    fig.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)", row=1, col=2)
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)", row=1, col=2)
+    fig.update_xaxes(
+        range=[-r_max, r_max],
+        scaleanchor="y",
+        scaleratio=1,
+        showticklabels=False,
+        row=1,
+        col=2,
+    )
+    fig.update_yaxes(range=[-r_max, r_max], showticklabels=False, row=1, col=2)
+    fig.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.12)", row=1, col=2)
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.12)", row=1, col=2)
     return fig
 
 
@@ -626,6 +618,13 @@ def main() -> None:
     st.session_state._bowl_anim_idx = 0
 
     st.subheader("Bowl trajectories (auto-loop)")
+    st.caption(
+        "Each marble is one person; its path on the bowl follows the same simulated emotional "
+        "states as the time series below (blue = Person A, x₁ · orange = Person B, x₂)."
+    )
+    st.caption(
+        "Left: 3D view — marbles sit on the bowl surface. Right: plan view from above, paths inside the rim."
+    )
     _bowl_auto_loop_fragment()
 
     st.subheader(f"Emotional states — {regime}")
