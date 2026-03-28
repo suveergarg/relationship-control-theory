@@ -6,12 +6,19 @@ Uses a non-inline backend so sliders and animation share a real GUI event loop
 (typically smoother than Jupyter + ipympl). Tries Qt first, then Tk:
 
   pip install PySide6   # optional, for QtAgg / Qt5Agg
+
+Stable (random) / Unstable (random) pick one of several named parameter
+sets; the chosen name is printed to stderr. Some stable presets include
+simulation-only fields (initial state, shocks off) so trajectories settle
+near the dashed setpoint lines.
 """
 
 from __future__ import annotations
 
 import importlib
+import random
 import sys
+import textwrap
 from dataclasses import dataclass
 
 
@@ -165,6 +172,303 @@ def classify_regime(x1, x2):
     return "Oscillatory / cycling"
 
 
+# (name, mapping): keys matching dashboard sliders update sliders; any other keys are simulation-only
+# overrides (e.g. x1_0, x2_0, shock_mag_*) applied until Reset or any slider move.
+# No-delay linear proxy: stable when (b1+k1+K1)(b2+k2+K2) < a1*a2.
+# Optional sim-only keys: x1_0, x2_0, shock_mag_1, shock_mag_2, shock_time_1, shock_time_2 (not sliders).
+STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
+    (
+        "symmetric damped",
+        {
+            "a1": 1.1,
+            "a2": 1.1,
+            "b1": 0.32,
+            "b2": 0.32,
+            "k1": 0.28,
+            "k2": 0.28,
+            "K1": 0.18,
+            "K2": 0.18,
+            "tau1": 0.7,
+            "tau2": 0.8,
+            "sigma1": 0.03,
+            "sigma2": 0.03,
+            "x1*": 0.55,
+            "x2*": 0.42,
+            "sat": 1.0,
+            "seed": 11,
+        },
+    ),
+    (
+        "asymmetric mild",
+        {
+            "a1": 1.25,
+            "a2": 0.95,
+            "b1": 0.38,
+            "b2": 0.32,
+            "k1": 0.26,
+            "k2": 0.22,
+            "K1": 0.2,
+            "K2": 0.16,
+            "tau1": 0.55,
+            "tau2": 1.1,
+            "sigma1": 0.035,
+            "sigma2": 0.04,
+            "x1*": 0.6,
+            "x2*": 0.38,
+            "sat": 1.0,
+            "seed": 19,
+        },
+    ),
+    (
+        "high damping",
+        {
+            "a1": 1.65,
+            "a2": 1.55,
+            "b1": 0.55,
+            "b2": 0.5,
+            "k1": 0.42,
+            "k2": 0.38,
+            "K1": 0.28,
+            "K2": 0.25,
+            "tau1": 0.45,
+            "tau2": 0.5,
+            "sigma1": 0.025,
+            "sigma2": 0.025,
+            "x1*": 0.45,
+            "x2*": 0.48,
+            "sat": 1.0,
+            "seed": 23,
+        },
+    ),
+    (
+        "low delay calm",
+        {
+            "a1": 1.0,
+            "a2": 1.0,
+            "b1": 0.42,
+            "b2": 0.4,
+            "k1": 0.32,
+            "k2": 0.3,
+            "K1": 0.18,
+            "K2": 0.17,
+            "tau1": 0.25,
+            "tau2": 0.3,
+            "sigma1": 0.02,
+            "sigma2": 0.02,
+            "x1*": 0.5,
+            "x2*": 0.5,
+            "sat": 1.2,
+            "seed": 31,
+        },
+    ),
+    (
+        "setpoint hold (symmetric)",
+        {
+            "a1": 1.15,
+            "a2": 1.15,
+            "b1": 0.65,
+            "b2": 0.65,
+            "k1": 0.6,
+            "k2": 0.6,
+            "K1": 0.08,
+            "K2": 0.08,
+            "tau1": 0.25,
+            "tau2": 0.25,
+            "sigma1": 0.012,
+            "sigma2": 0.012,
+            "x1*": 0.5,
+            "x2*": 0.5,
+            "sat": 1.0,
+            "seed": 11,
+            "x1_0": 0.5,
+            "x2_0": 0.5,
+            "shock_mag_1": 0.0,
+            "shock_mag_2": 0.0,
+        },
+    ),
+    (
+        "setpoint hold (offset goals)",
+        {
+            "a1": 1.18,
+            "a2": 1.12,
+            "b1": 0.62,
+            "b2": 0.68,
+            "k1": 0.58,
+            "k2": 0.63,
+            "K1": 0.12,
+            "K2": 0.14,
+            "tau1": 0.22,
+            "tau2": 0.26,
+            "sigma1": 0.012,
+            "sigma2": 0.014,
+            "x1*": 0.48,
+            "x2*": 0.58,
+            "sat": 1.0,
+            "seed": 17,
+            "x1_0": 0.46,
+            "x2_0": 0.56,
+            "shock_mag_1": 0.0,
+            "shock_mag_2": 0.0,
+        },
+    ),
+    (
+        "setpoint hold (mild mismatch)",
+        {
+            "a1": 1.14,
+            "a2": 1.16,
+            "b1": 0.64,
+            "b2": 0.66,
+            "k1": 0.59,
+            "k2": 0.61,
+            "K1": 0.1,
+            "K2": 0.1,
+            "tau1": 0.24,
+            "tau2": 0.24,
+            "sigma1": 0.011,
+            "sigma2": 0.011,
+            "x1*": 0.52,
+            "x2*": 0.48,
+            "sat": 1.0,
+            "seed": 29,
+            "x1_0": 0.51,
+            "x2_0": 0.47,
+            "shock_mag_1": 0.0,
+            "shock_mag_2": 0.0,
+        },
+    ),
+]
+
+UNSTABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
+    (
+        "symmetric gain runaway",
+        {
+            "a1": 0.42,
+            "a2": 0.42,
+            "b1": 2.15,
+            "b2": 2.15,
+            "k1": 1.55,
+            "k2": 1.55,
+            "K1": 0.85,
+            "K2": 0.85,
+            "tau1": 0.35,
+            "tau2": 0.35,
+            "sigma1": 0.02,
+            "sigma2": 0.02,
+            "x1*": 0.5,
+            "x2*": 0.5,
+            "sat": 1.0,
+            "seed": 7,
+        },
+    ),
+    (
+        "weak damping strong coupling",
+        {
+            "a1": 0.35,
+            "a2": 0.38,
+            "b1": 1.9,
+            "b2": 1.85,
+            "k1": 1.65,
+            "k2": 1.6,
+            "K1": 0.95,
+            "K2": 0.9,
+            "tau1": 0.4,
+            "tau2": 0.45,
+            "sigma1": 0.025,
+            "sigma2": 0.025,
+            "x1*": 0.55,
+            "x2*": 0.45,
+            "sat": 1.0,
+            "seed": 41,
+        },
+    ),
+    (
+        "asymmetric amplifier",
+        {
+            "a1": 0.48,
+            "a2": 0.4,
+            "b1": 2.4,
+            "b2": 1.65,
+            "k1": 1.4,
+            "k2": 1.8,
+            "K1": 0.75,
+            "K2": 1.0,
+            "tau1": 0.5,
+            "tau2": 2.8,
+            "sigma1": 0.03,
+            "sigma2": 0.04,
+            "x1*": 0.65,
+            "x2*": 0.35,
+            "sat": 1.0,
+            "seed": 53,
+        },
+    ),
+    (
+        "high delay + gain",
+        {
+            "a1": 0.55,
+            "a2": 0.52,
+            "b1": 1.75,
+            "b2": 1.7,
+            "k1": 1.35,
+            "k2": 1.3,
+            "K1": 0.7,
+            "K2": 0.68,
+            "tau1": 3.2,
+            "tau2": 3.5,
+            "sigma1": 0.06,
+            "sigma2": 0.06,
+            "x1*": 0.5,
+            "x2*": 0.5,
+            "sat": 1.0,
+            "seed": 67,
+        },
+    ),
+]
+
+# Human-readable slider captions (internal keys stay a1, b1, … for presets / update()).
+SLIDER_DISPLAY_LABELS: dict[str, str] = {
+    "a1": "A: emotional fade",
+    "a2": "B: emotional fade",
+    "b1": "A: tracks partner mood",
+    "b2": "B: tracks partner mood",
+    "k1": "A: reward from partner",
+    "k2": "B: reward from partner",
+    "K1": "A: repair / regulate to goal",
+    "K2": "B: repair / regulate to goal",
+    "tau1": "A: response delay",
+    "tau2": "B: response delay",
+    "sigma1": "A: noise / misread",
+    "sigma2": "B: noise / misread",
+    "x1*": "A: affection need (setpoint)",
+    "x2*": "B: affection need (setpoint)",
+    "sat": "emotional saturation (tanh)",
+    "seed": "random seed",
+}
+
+
+def _wrap_slider_caption(text: str, width: int = 22) -> str:
+    """Break long slider captions into short lines so they stay readable."""
+    return "\n".join(textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False))
+
+
+def attach_slider_percent_display(slider: Slider) -> None:
+    """Show only the knob position along each slider’s range (0–100%)."""
+    lo = float(slider.valmin)
+    hi = float(slider.valmax)
+    span = hi - lo
+
+    def refresh(_: float | None = None) -> None:
+        val = slider.val
+        if span == 0:
+            slider.valtext.set_text("—")
+        else:
+            pct = 100.0 * (val - lo) / span
+            slider.valtext.set_text(f"{pct:.0f}%")
+
+    slider.on_changed(refresh)
+    refresh()
+
+
 def bowl_surface_mesh(r_max: float = 2.8, n: int = 55, k_parabola: float = 0.18):
     u = np.linspace(-r_max, r_max, n)
     v = np.linspace(-r_max, r_max, n)
@@ -197,6 +501,7 @@ def coupled_bowl_paths(
 def interactive_dashboard():
     """Single window: sliders (Person 1 / Person 2), emotional states, bowl 3D + plan."""
     params = LoveSystemParams()
+    sim_extras: dict[str, float | int] = {}
 
     t, x1, x2, *_ = simulate(params)
     r_max = 2.8
@@ -208,12 +513,17 @@ def interactive_dashboard():
     except Exception:
         pass
 
-    # Slider rows: enough pitch so labels/tracks do not overlap; headers sit above row 0.
-    h_sl = 0.020
-    v_step = 0.034
-    y0 = 0.898
-    x_a, w_a = 0.07, 0.38
-    x_b, w_b = 0.55, 0.38
+    # Sliders: separate label axes (wrapped text) + track-only Slider — avoids label/value overlap.
+    h_row = 0.024
+    v_step = 0.038
+    y0 = 0.952
+    wl = 0.195
+    ws = 0.265
+    xl_a, xs_a = 0.035, 0.235
+    xl_b, xs_b = 0.508, 0.708
+    gap_before_shared = 0.018
+    y_shared = y0 - 7 * v_step - gap_before_shared
+    label_fs, val_fs = 7.5, 7.5
 
     p1 = [
         ("a1", 0.0, 2.5, params.a1),
@@ -234,18 +544,8 @@ def interactive_dashboard():
         ("x2*", -2.0, 2.0, params.x2_star),
     ]
 
-    slider_specs = []
-    for i, (name, lo, hi, v0) in enumerate(p1):
-        slider_specs.append((name, lo, hi, v0, [x_a, y0 - i * v_step, w_a, h_sl]))
-    for i, (name, lo, hi, v0) in enumerate(p2):
-        slider_specs.append((name, lo, hi, v0, [x_b, y0 - i * v_step, w_b, h_sl]))
-
-    y_shared = y0 - 7 * v_step - 0.022
-    slider_specs.append(("sat", 0.1, 3.0, params.sat_alpha, [0.12, y_shared, 0.32, h_sl]))
-    slider_specs.append(("seed", 0, 100, params.seed, [0.56, y_shared, 0.32, h_sl]))
-
     fig.text(
-        0.26,
+        0.25,
         0.978,
         "Person 1 (A)",
         ha="center",
@@ -262,7 +562,7 @@ def interactive_dashboard():
         fontweight="bold",
         color="0.1",
     )
-    y_shared_lbl = y_shared + h_sl + 0.018
+    y_shared_lbl = y_shared + h_row + 0.016
     fig.text(
         0.50,
         y_shared_lbl,
@@ -289,7 +589,7 @@ def interactive_dashboard():
     line_x1s = ax_state.axhline(params.x1_star, linestyle="--", alpha=0.7, label="A setpoint")
     line_x2s = ax_state.axhline(params.x2_star, linestyle=":", alpha=0.7, label="B setpoint")
     title_state = ax_state.set_title(
-        f"Emotional states — {classify_regime(x1, x2)}",
+        "Emotional states",
         fontsize=10,
         pad=8,
     )
@@ -299,11 +599,11 @@ def interactive_dashboard():
     ax_state.grid(True, alpha=0.3)
     ax_state.legend(loc="lower left", fontsize=7, framealpha=0.92)
 
-    hint_y = (state_top + y_shared + h_sl) / 2
+    hint_y = (state_top + y_shared + h_row) / 2
     fig.text(
         0.50,
         hint_y,
-        "Sliders control both plots below",
+        "Sliders: readout is % along each control’s range (not raw parameter units)",
         ha="center",
         va="center",
         fontsize=8,
@@ -397,38 +697,52 @@ def interactive_dashboard():
         fig.canvas.draw_idle()
 
     sliders: dict[str, Slider] = {}
-    for name, vmin, vmax, vinit, rect in slider_specs:
-        sax = fig.add_axes(rect)
+
+    def add_slider_row(name: str, vmin: float, vmax: float, vinit: float, xl: float, x_track: float, yb: float):
+        lax = fig.add_axes([xl, yb, wl, h_row])
+        lax.set_axis_off()
+        lax.text(
+            1.0,
+            0.5,
+            _wrap_slider_caption(SLIDER_DISPLAY_LABELS.get(name, name)),
+            transform=lax.transAxes,
+            ha="right",
+            va="center",
+            fontsize=label_fs,
+            color="0.2",
+            linespacing=1.12,
+        )
+        sax = fig.add_axes([x_track, yb, ws, h_row])
         valfmt = "%0.0f" if name == "seed" else "%1.2f"
-        sliders[name] = Slider(ax=sax, label=name, valmin=vmin, valmax=vmax, valinit=vinit, valfmt=valfmt)
+        s = Slider(ax=sax, label="", valmin=vmin, valmax=vmax, valinit=vinit, valfmt=valfmt)
+        s.valtext.set_fontsize(val_fs)
+        sliders[name] = s
+
+    for i, (name, lo, hi, v0) in enumerate(p1):
+        add_slider_row(name, lo, hi, v0, xl_a, xs_a, y0 - i * v_step)
+    for i, (name, lo, hi, v0) in enumerate(p2):
+        add_slider_row(name, lo, hi, v0, xl_b, xs_b, y0 - i * v_step)
+
+    add_slider_row("sat", 0.1, 3.0, params.sat_alpha, xl_a, xs_a, y_shared)
+    add_slider_row("seed", 0.0, 100.0, float(params.seed), xl_b, xs_b, y_shared)
+
+    for _s in sliders.values():
+        attach_slider_percent_display(_s)
 
     btn_h, btn_y = 0.034, 0.012
-    reset_ax = fig.add_axes([0.28, btn_y, 0.20, btn_h])
+    reset_ax = fig.add_axes([0.05, btn_y, 0.15, btn_h])
     reset_button = Button(reset_ax, "Reset")
-    unstable_ax = fig.add_axes([0.52, btn_y, 0.26, btn_h])
-    unstable_button = Button(unstable_ax, "Unstable preset")
+    stable_ax = fig.add_axes([0.22, btn_y, 0.24, btn_h])
+    stable_button = Button(stable_ax, "Stable (random)")
+    unstable_ax = fig.add_axes([0.48, btn_y, 0.30, btn_h])
+    unstable_button = Button(unstable_ax, "Unstable (random)")
 
-    UNSTABLE_PRESET = {
-        "a1": 0.42,
-        "a2": 0.42,
-        "b1": 2.15,
-        "b2": 2.15,
-        "k1": 1.55,
-        "k2": 1.55,
-        "K1": 0.85,
-        "K2": 0.85,
-        "tau1": 0.35,
-        "tau2": 0.35,
-        "sigma1": 0.02,
-        "sigma2": 0.02,
-        "x1*": 0.5,
-        "x2*": 0.5,
-        "sat": 1.0,
-        "seed": 7,
-    }
-
-    def apply_params_to_sliders(mapping):
+    def apply_params_to_sliders(mapping: dict[str, float | int]) -> None:
+        sim_extras.clear()
         for key, val in mapping.items():
+            if key not in sliders:
+                sim_extras[key] = val
+                continue
             s = sliders[key]
             lo, hi = s.valmin, s.valmax
             v = float(val) if key != "seed" else int(val)
@@ -443,12 +757,12 @@ def interactive_dashboard():
         p = LoveSystemParams(
             T=params.T,
             dt=params.dt,
-            x1_0=params.x1_0,
-            x2_0=params.x2_0,
-            shock_time_1=params.shock_time_1,
-            shock_mag_1=params.shock_mag_1,
-            shock_time_2=params.shock_time_2,
-            shock_mag_2=params.shock_mag_2,
+            x1_0=float(sim_extras.get("x1_0", params.x1_0)),
+            x2_0=float(sim_extras.get("x2_0", params.x2_0)),
+            shock_time_1=float(sim_extras.get("shock_time_1", params.shock_time_1)),
+            shock_mag_1=float(sim_extras.get("shock_mag_1", params.shock_mag_1)),
+            shock_time_2=float(sim_extras.get("shock_time_2", params.shock_time_2)),
+            shock_mag_2=float(sim_extras.get("shock_mag_2", params.shock_mag_2)),
             a1=sliders["a1"].val,
             a2=sliders["a2"].val,
             b1=sliders["b1"].val,
@@ -493,6 +807,7 @@ def interactive_dashboard():
         deb_timer.add_callback(update)
 
         def on_slider_changed(_val):
+            sim_extras.clear()
             stop_bowl_animation()
             deb_timer.stop()
             deb_timer.start()
@@ -502,6 +817,7 @@ def interactive_dashboard():
 
     except Exception:
         def on_slider_changed(_val):
+            sim_extras.clear()
             stop_bowl_animation()
             update()
 
@@ -509,6 +825,7 @@ def interactive_dashboard():
             pass
 
     def reset(_):
+        sim_extras.clear()
         for s in sliders.values():
             s.eventson = False
         try:
@@ -520,15 +837,25 @@ def interactive_dashboard():
         stop_debounce()
         update()
 
-    def unstable_preset(_):
-        apply_params_to_sliders(UNSTABLE_PRESET)
+    def stable_preset(_):
+        label, mapping = random.choice(STABLE_PRESETS)
+        apply_params_to_sliders(mapping)
         stop_debounce()
         update()
+        print(f"Stable preset: {label}", file=sys.stderr)
+
+    def unstable_preset(_):
+        label, mapping = random.choice(UNSTABLE_PRESETS)
+        apply_params_to_sliders(mapping)
+        stop_debounce()
+        update()
+        print(f"Unstable preset: {label}", file=sys.stderr)
 
     for s in sliders.values():
         s.on_changed(on_slider_changed)
 
     reset_button.on_clicked(reset)
+    stable_button.on_clicked(stable_preset)
     unstable_button.on_clicked(unstable_preset)
 
     refresh_bowl(x1, x2, rotate_view=True)
