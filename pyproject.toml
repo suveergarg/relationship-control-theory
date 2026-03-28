@@ -15,3 +15,6 @@ dependencies = [
 gui = [
     "PySide6>=6.5",
 ]
+streamlit = [
+    "streamlit>=1.28",
+]
