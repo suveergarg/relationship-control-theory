@@ -308,7 +308,6 @@ def interactive_dashboard():
     for i, (name, lo, hi, v0) in enumerate(p2):
         add_slider_row(name, lo, hi, v0, xl_b, xs_b, y0 - i * v_step)
 
-    add_slider_row("sat", 0.1, 3.0, params.sat_alpha, xl_a, xs_a, y_shared)
     add_slider_row("seed", 0.0, 100.0, float(params.seed), xl_b, xs_b, y_shared)
 
     for _s in sliders.values():
@@ -362,7 +361,6 @@ def interactive_dashboard():
             sigma2=sliders["sigma2"].val,
             x1_star=sliders["x1*"].val,
             x2_star=sliders["x2*"].val,
-            sat_alpha=sliders["sat"].val,
             seed=int(sliders["seed"].val),
         )
 

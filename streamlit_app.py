@@ -18,6 +18,7 @@ import math
 import os
 import random
 from datetime import timedelta
+from pathlib import Path
 
 # Headless matplotlib before pyplot import (required on servers and Streamlit Cloud).
 os.environ.setdefault("MPLBACKEND", "Agg")
@@ -47,6 +48,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+_COUPLED_SYSTEM_DIAGRAM_SVG = Path(__file__).resolve().parent / "simple_coupled_system_centered_title.svg"
 
 
 def _init_session() -> None:
@@ -106,7 +109,6 @@ def _params_from_ui() -> LoveSystemParams:
         "sigma2": float(s["sigma2"]),
         "x1_star": float(s["x1*"]),
         "x2_star": float(s["x2*"]),
-        "sat_alpha": float(s["sat"]),
         "seed": int(s["seed"]),
     }
     return LoveSystemParams(**kw)
@@ -360,7 +362,7 @@ def _onboarding_card() -> None:
   </p>
   <p style="margin: 0; font-size: 1.02rem; color: #5c4338; line-height: 1.55;">
     Turn the knobs —<br/>
-    see when connection holds, loops, or breaks
+    and see what happens
   </p>
 </div>
 """,
@@ -368,10 +370,16 @@ def _onboarding_card() -> None:
     )
 
 
+def _coupled_system_diagram() -> None:
+    if _COUPLED_SYSTEM_DIAGRAM_SVG.is_file():
+        st.image(str(_COUPLED_SYSTEM_DIAGRAM_SVG), width="stretch")
+
+
 def main() -> None:
     _init_session()
 
     _onboarding_card()
+    _coupled_system_diagram()
 
     st.subheader("Presets")
     b1, b2, b3, b4 = st.columns([1, 1, 1, 2])
@@ -410,11 +418,7 @@ def main() -> None:
             _render_slider(key)
 
     st.markdown("**Shared**")
-    s1, s2 = st.columns(2)
-    with s1:
-        _render_slider("sat")
-    with s2:
-        _render_slider("seed")
+    _render_slider("seed")
 
     st.divider()
 

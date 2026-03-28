@@ -43,16 +43,14 @@ class LoveSystemParams:
     sigma1: float = 0.04
     sigma2: float = 0.04
 
-    sat_alpha: float = 1.0
-
     shock_time_1: float = 20.0
     shock_mag_1: float = 0.4
     shock_time_2: float = 45.0
     shock_mag_2: float = -0.5
 
 
-def saturation(x, alpha: float = 1.0):
-    return np.tanh(alpha * x)
+def saturation(x):
+    return np.tanh(x)
 
 
 def external_shock(t, shock_time, shock_mag, width: float = 0.8):
@@ -82,8 +80,8 @@ def simulate(params: LoveSystemParams):
         x2_delayed = x2[max(0, i - d1)]
         x1_delayed = x1[max(0, i - d2)]
 
-        r1[i] = params.k1 * saturation(x2_delayed, params.sat_alpha)
-        r2[i] = params.k2 * saturation(x1_delayed, params.sat_alpha)
+        r1[i] = params.k1 * saturation(x2_delayed)
+        r2[i] = params.k2 * saturation(x1_delayed)
 
         u1[i] = params.K1 * (x2_delayed - params.x1_star)
         u2[i] = params.K2 * (x1_delayed - params.x2_star)
@@ -96,7 +94,7 @@ def simulate(params: LoveSystemParams):
 
         dx1 = (
             -params.a1 * x1[i - 1]
-            + params.b1 * saturation(x2_delayed, params.sat_alpha)
+            + params.b1 * saturation(x2_delayed)
             + r1[i]
             + u1[i]
             + shock1
@@ -105,7 +103,7 @@ def simulate(params: LoveSystemParams):
 
         dx2 = (
             -params.a2 * x2[i - 1]
-            + params.b2 * saturation(x1_delayed, params.sat_alpha)
+            + params.b2 * saturation(x1_delayed)
             + r2[i]
             + u2[i]
             + shock2
@@ -154,7 +152,6 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.03,
             "x1*": 0.55,
             "x2*": 0.42,
-            "sat": 1.0,
             "seed": 11,
         },
     ),
@@ -175,7 +172,6 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.04,
             "x1*": 0.6,
             "x2*": 0.38,
-            "sat": 1.0,
             "seed": 19,
         },
     ),
@@ -196,7 +192,6 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.025,
             "x1*": 0.45,
             "x2*": 0.48,
-            "sat": 1.0,
             "seed": 23,
         },
     ),
@@ -217,7 +212,6 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.02,
             "x1*": 0.5,
             "x2*": 0.5,
-            "sat": 1.2,
             "seed": 31,
         },
     ),
@@ -238,7 +232,6 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.012,
             "x1*": 0.5,
             "x2*": 0.5,
-            "sat": 1.0,
             "seed": 11,
             "x1_0": 0.5,
             "x2_0": 0.5,
@@ -263,7 +256,6 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.014,
             "x1*": 0.48,
             "x2*": 0.58,
-            "sat": 1.0,
             "seed": 17,
             "x1_0": 0.46,
             "x2_0": 0.56,
@@ -288,7 +280,6 @@ STABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.011,
             "x1*": 0.52,
             "x2*": 0.48,
-            "sat": 1.0,
             "seed": 29,
             "x1_0": 0.51,
             "x2_0": 0.47,
@@ -316,7 +307,6 @@ UNSTABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.02,
             "x1*": 0.5,
             "x2*": 0.5,
-            "sat": 1.0,
             "seed": 7,
         },
     ),
@@ -337,7 +327,6 @@ UNSTABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.025,
             "x1*": 0.55,
             "x2*": 0.45,
-            "sat": 1.0,
             "seed": 41,
         },
     ),
@@ -358,7 +347,6 @@ UNSTABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.04,
             "x1*": 0.65,
             "x2*": 0.35,
-            "sat": 1.0,
             "seed": 53,
         },
     ),
@@ -379,28 +367,26 @@ UNSTABLE_PRESETS: list[tuple[str, dict[str, float | int]]] = [
             "sigma2": 0.06,
             "x1*": 0.5,
             "x2*": 0.5,
-            "sat": 1.0,
             "seed": 67,
         },
     ),
 ]
 
 SLIDER_DISPLAY_LABELS: dict[str, str] = {
-    "a1": "A: emotional fade",
-    "a2": "B: emotional fade",
-    "b1": "A: tracks partner mood",
-    "b2": "B: tracks partner mood",
-    "k1": "A: reward from partner",
-    "k2": "B: reward from partner",
-    "K1": "A: repair / regulate to goal",
-    "K2": "B: repair / regulate to goal",
-    "tau1": "A: response delay",
-    "tau2": "B: response delay",
-    "sigma1": "A: noise / misread",
-    "sigma2": "B: noise / misread",
-    "x1*": "A: affection need (setpoint)",
-    "x2*": "B: affection need (setpoint)",
-    "sat": "emotional saturation (tanh)",
+    "a1": "A: emotional persistence",
+    "a2": "B: emotional persistence",
+    "b1": "A: partner influence",
+    "b2": "B: partner influence",
+    "k1": "A: reward sensitivity",
+    "k2": "B: reward sensitivity",
+    "K1": "A: relationship effort",
+    "K2": "B: relationship effort",
+    "tau1": "A: reaction delay",
+    "tau2": "B: reaction delay",
+    "sigma1": "A: misinterpretation",
+    "sigma2": "B: misinterpretation",
+    "x1*": "A: affection need",
+    "x2*": "B: affection need",
     "seed": "random seed",
 }
 
@@ -420,7 +406,6 @@ SLIDER_BOUNDS: dict[str, tuple[float, float]] = {
     "sigma2": (0.0, 0.5),
     "x1*": (-2.0, 2.0),
     "x2*": (-2.0, 2.0),
-    "sat": (0.1, 3.0),
     "seed": (0.0, 100.0),
 }
 
@@ -439,7 +424,6 @@ SLIDER_ATTR: dict[str, str] = {
     "sigma2": "sigma2",
     "x1*": "x1_star",
     "x2*": "x2_star",
-    "sat": "sat_alpha",
     "seed": "seed",
 }
 
