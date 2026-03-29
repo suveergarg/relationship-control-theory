@@ -7,9 +7,10 @@ Run locally:
 
 Deploy: connect this repo to https://streamlit.io/cloud and set main file to streamlit_app.py.
 
-Sliders sit above the plots (like the desktop Matplotlib layout). Bowl views use Plotly and
-auto-loop via ``st.fragment(run_every=...)`` because Matplotlib ``FuncAnimation`` does not run
-inside Streamlit reruns and Plotly’s built-in animate does not loop reliably.
+Sliders sit above the plots (like the desktop Matplotlib layout). The 3D bowl is static Plotly
+(updated on parameter changes). The plan view animates inside Plotly (frames + play / slider) so
+the server does not use ``st.fragment(run_every=...)``, avoiding Streamlit websocket cache races
+that surface as "Cached ForwardMsg MISS" when timers interleave with full reruns.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from __future__ import annotations
 import math
 import os
 import random
-from datetime import timedelta
 from pathlib import Path
 
 # Headless matplotlib before pyplot import (required on servers and Streamlit Cloud).
@@ -26,7 +26,6 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
@@ -173,172 +172,6 @@ def _trail_line_indices(j: int, max_points: int) -> np.ndarray:
     return np.unique(np.linspace(0, j, num=max_points, dtype=int))
 
 
-def _bowl_plotly_figure(
-    xa: np.ndarray,
-    ya: np.ndarray,
-    za: np.ndarray,
-    xb: np.ndarray,
-    yb: np.ndarray,
-    zb: np.ndarray,
-    Xb: np.ndarray,
-    Yb: np.ndarray,
-    Zb: np.ndarray,
-    r_max: float,
-    z_hi: float,
-    j: int,
-    camera_step: float,
-    *,
-    trail_max_points: int,
-) -> go.Figure:
-    n = len(xa)
-    j = min(max(j, 0), max(n - 1, 0))
-    li = _trail_line_indices(j, trail_max_points)
-
-    surface = go.Surface(
-        x=Xb,
-        y=Yb,
-        z=Zb,
-        opacity=0.42,
-        showscale=False,
-        colorscale=[[0, "#d8d8d8"], [1, "#c0c0c0"]],
-        hoverinfo="skip",
-        lighting=dict(ambient=0.85, diffuse=0.35, specular=0.2),
-    )
-    traces_3d = [
-        go.Scatter3d(
-            x=xa[li],
-            y=ya[li],
-            z=za[li],
-            mode="lines",
-            line=dict(color="#1f77b4", width=4),
-            name="A trail",
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-        go.Scatter3d(
-            x=xb[li],
-            y=yb[li],
-            z=zb[li],
-            mode="lines",
-            line=dict(color="#ff7f0e", width=4),
-            name="B trail",
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-        go.Scatter3d(
-            x=[xa[j]],
-            y=[ya[j]],
-            z=[za[j]],
-            mode="markers",
-            marker=dict(size=8, color="#1f77b4"),
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-        go.Scatter3d(
-            x=[xb[j]],
-            y=[yb[j]],
-            z=[zb[j]],
-            mode="markers",
-            marker=dict(size=8, color="#ff7f0e"),
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-    ]
-    th = np.linspace(0, 2 * np.pi, 200)
-    boundary = go.Scatter(
-        x=r_max * np.cos(th),
-        y=r_max * np.sin(th),
-        mode="lines",
-        line=dict(color="gray", dash="dash"),
-        name="rim",
-        showlegend=False,
-        hoverinfo="skip",
-    )
-    traces_2d = [
-        go.Scatter(
-            x=xa[li],
-            y=ya[li],
-            mode="lines",
-            line=dict(color="#1f77b4", width=3),
-            name="A trail",
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-        go.Scatter(
-            x=xb[li],
-            y=yb[li],
-            mode="lines",
-            line=dict(color="#ff7f0e", width=3),
-            name="B trail",
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-        go.Scatter(
-            x=[xa[j]],
-            y=[ya[j]],
-            mode="markers",
-            marker=dict(size=11, color="#1f77b4"),
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-        go.Scatter(
-            x=[xb[j]],
-            y=[yb[j]],
-            mode="markers",
-            marker=dict(size=11, color="#ff7f0e"),
-            showlegend=False,
-            hoverinfo="skip",
-        ),
-    ]
-    fig = make_subplots(
-        rows=1,
-        cols=2,
-        specs=[[{"type": "scatter3d"}, {"type": "scatter"}]],
-        column_widths=[0.52, 0.48],
-        horizontal_spacing=0.05,
-    )
-    fig.add_trace(surface, row=1, col=1)
-    for tr in traces_3d:
-        fig.add_trace(tr, row=1, col=1)
-    for tr in [boundary, *traces_2d]:
-        fig.add_trace(tr, row=1, col=2)
-
-    cam = _orbit_camera(camera_step)
-    fig.update_layout(
-        height=460,
-        margin=dict(l=0, r=0, t=24, b=20),
-        paper_bgcolor="#ffffff",
-        showlegend=False,
-    )
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa", showticklabels=False),
-            yaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa", showticklabels=False),
-            zaxis=dict(range=[0, z_hi], backgroundcolor="#fafafa", showticklabels=False),
-            aspectmode="cube",
-            camera=cam,
-        ),
-    )
-    fig.update_xaxes(
-        range=[-r_max, r_max],
-        scaleanchor="y",
-        scaleratio=1,
-        showticklabels=False,
-        row=1,
-        col=2,
-    )
-    fig.update_yaxes(range=[-r_max, r_max], showticklabels=False, row=1, col=2)
-    fig.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.12)", row=1, col=2)
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.12)", row=1, col=2)
-    return fig
-
-
-# Bowl animation: each fragment rerun serializes a full Plotly figure to the browser. Coarser mesh,
-# decimated trails, and a modest interval keep Cloud / mobile usable. Tune via env if needed.
-def _bowl_anim_ms() -> int:
-    return int(os.environ.get("LOVE_BOWL_ANIM_MS", "110"))
-
-
 def _bowl_surface_grid_n() -> int:
     n = int(os.environ.get("LOVE_BOWL_MESH_N", "36"))
     return max(24, min(n, 72))
@@ -349,46 +182,265 @@ def _bowl_trail_max_points() -> int:
     return max(32, min(n, 4000))
 
 
-@st.fragment(run_every=timedelta(milliseconds=_bowl_anim_ms()))
-def _bowl_auto_loop_fragment() -> None:
-    pl = st.session_state.get("bowl_animation_payload")
-    if not pl:
-        return
-    j_list: list[int] = pl["j_list"]
-    n_fr = len(j_list)
-    if n_fr == 0:
-        return
-    idx = int(st.session_state.get("_bowl_anim_idx", 0)) % n_fr
-    j = j_list[idx]
-    fig = _bowl_plotly_figure(
-        pl["xa"],
-        pl["ya"],
-        pl["za"],
-        pl["xb"],
-        pl["yb"],
-        pl["zb"],
-        pl["Xb"],
-        pl["Yb"],
-        pl["Zb"],
-        pl["r_max"],
-        pl["z_hi"],
+def _bowl_plotly_max_frames() -> int:
+    n = int(os.environ.get("LOVE_BOWL_PLOTLY_FRAMES", "48"))
+    return max(8, min(n, 200))
+
+
+def _bowl_plan_frame_duration_ms() -> int:
+    return int(os.environ.get("LOVE_BOWL_FRAME_MS", "72"))
+
+
+def _subsample_j_list(j_list: list[int], cap: int) -> list[int]:
+    if len(j_list) <= cap:
+        return j_list
+    idx = np.unique(np.linspace(0, len(j_list) - 1, num=cap, dtype=int))
+    out = [j_list[int(i)] for i in idx]
+    if out[-1] != j_list[-1]:
+        out.append(j_list[-1])
+    return out
+
+
+def _bowl_plan_traces_at_j(pl: dict, j: int) -> tuple[list, int]:
+    """Return four plan-view traces (A/B lines + markers) and clamped index j."""
+    xa = pl["xa"]
+    ya = pl["ya"]
+    xb = pl["xb"]
+    yb = pl["yb"]
+    trail_max = int(pl.get("trail_max_points", _bowl_trail_max_points()))
+    n = len(xa)
+    j = min(max(int(j), 0), max(n - 1, 0))
+    li = _trail_line_indices(j, trail_max)
+    return (
+        [
+            go.Scattergl(
+                x=xa[li],
+                y=ya[li],
+                mode="lines",
+                line=dict(color="#1f77b4", width=3),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            go.Scattergl(
+                x=xb[li],
+                y=yb[li],
+                mode="lines",
+                line=dict(color="#ff7f0e", width=3),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            go.Scatter(
+                x=[xa[j]],
+                y=[ya[j]],
+                mode="markers",
+                marker=dict(size=11, color="#1f77b4"),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            go.Scatter(
+                x=[xb[j]],
+                y=[yb[j]],
+                mode="markers",
+                marker=dict(size=11, color="#ff7f0e"),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+        ],
         j,
-        float(idx),
-        trail_max_points=int(pl.get("trail_max_points", _bowl_trail_max_points())),
     )
-    st.session_state._bowl_anim_idx = idx + 1
-    # Single figure = one Streamlit chart update per frame (reduces Plotly flicker vs two charts).
-    st.plotly_chart(
-        fig,
-        width="stretch",
-        key="bowl_auto_loop",
-        theme=None,
-        config={
-            "displayModeBar": False,
-            # Retina / high-DPI: default 2× GL buffer is expensive for 3D; 1 is usually fine on web.
-            "plotGlPixelRatio": float(os.environ.get("LOVE_BOWL_GL_PIXEL_RATIO", "1")),
-        },
+
+
+def _bowl_static_3d_figure(pl: dict) -> go.Figure:
+    """Bowl surface + full trajectories; rebuilt only on full-app rerun (slider changes)."""
+    xa = pl["xa"]
+    ya = pl["ya"]
+    za = pl["za"]
+    xb = pl["xb"]
+    yb = pl["yb"]
+    zb = pl["zb"]
+    Xb = pl["Xb"]
+    Yb = pl["Yb"]
+    Zb = pl["Zb"]
+    r_max = float(pl["r_max"])
+    z_hi = float(pl["z_hi"])
+    trail_max = int(pl.get("trail_max_points", _bowl_trail_max_points()))
+    n = len(xa)
+    j_end = max(n - 1, 0)
+    li = _trail_line_indices(j_end, trail_max)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Surface(
+            x=Xb,
+            y=Yb,
+            z=Zb,
+            opacity=0.42,
+            showscale=False,
+            colorscale=[[0, "#d8d8d8"], [1, "#c0c0c0"]],
+            hoverinfo="skip",
+            lighting=dict(ambient=0.85, diffuse=0.35, specular=0.2),
+        )
     )
+    fig.add_trace(
+        go.Scatter3d(
+            x=xa[li],
+            y=ya[li],
+            z=za[li],
+            mode="lines",
+            line=dict(color="#1f77b4", width=4),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter3d(
+            x=xb[li],
+            y=yb[li],
+            z=zb[li],
+            mode="lines",
+            line=dict(color="#ff7f0e", width=4),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter3d(
+            x=[xa[j_end]],
+            y=[ya[j_end]],
+            z=[za[j_end]],
+            mode="markers",
+            marker=dict(size=8, color="#1f77b4"),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter3d(
+            x=[xb[j_end]],
+            y=[yb[j_end]],
+            z=[zb[j_end]],
+            mode="markers",
+            marker=dict(size=8, color="#ff7f0e"),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.update_layout(
+        height=460,
+        margin=dict(l=0, r=0, t=8, b=8),
+        paper_bgcolor="#ffffff",
+        showlegend=False,
+        scene=dict(
+            xaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa", showticklabels=False),
+            yaxis=dict(range=[-r_max, r_max], backgroundcolor="#fafafa", showticklabels=False),
+            zaxis=dict(range=[0, z_hi], backgroundcolor="#fafafa", showticklabels=False),
+            aspectmode="cube",
+            camera=_orbit_camera(0.0),
+        ),
+    )
+    return fig
+
+
+def _bowl_plan_interactive_figure(pl: dict) -> go.Figure:
+    """2D plan view: Plotly frames + play / slider (browser-side animation, no Streamlit timer)."""
+    r_max = float(pl["r_max"])
+    j_list = pl["j_list"]
+    if not j_list:
+        j_list = [0]
+    frame_js = _subsample_j_list(j_list, _bowl_plotly_max_frames())
+    dur = _bowl_plan_frame_duration_ms()
+
+    th = np.linspace(0, 2 * np.pi, 96)
+    boundary = go.Scatter(
+        x=r_max * np.cos(th),
+        y=r_max * np.sin(th),
+        mode="lines",
+        line=dict(color="gray", dash="dash", width=1),
+        showlegend=False,
+        hoverinfo="skip",
+    )
+    j0 = frame_js[0]
+    traces0, _ = _bowl_plan_traces_at_j(pl, j0)
+
+    frames: list[go.Frame] = []
+    for k, j in enumerate(frame_js):
+        tdata, _ = _bowl_plan_traces_at_j(pl, j)
+        frames.append(go.Frame(data=tdata, traces=[1, 2, 3, 4], name=str(k)))
+
+    fig = go.Figure(data=[boundary, *traces0], frames=frames)
+    fig.update_layout(
+        height=480,
+        margin=dict(l=0, r=0, t=8, b=88),
+        paper_bgcolor="#ffffff",
+        showlegend=False,
+        updatemenus=[
+            dict(
+                type="buttons",
+                showactive=False,
+                direction="left",
+                x=0.06,
+                y=-0.18,
+                xanchor="left",
+                yanchor="top",
+                buttons=[
+                    dict(
+                        label="▶ Play",
+                        method="animate",
+                        args=[
+                            [str(i) for i in range(len(frames))],
+                            dict(
+                                frame=dict(duration=dur, redraw=True),
+                                fromcurrent=False,
+                                transition=dict(duration=0),
+                                mode="immediate",
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ],
+        sliders=[
+            dict(
+                active=0,
+                lenmode="fraction",
+                len=0.88,
+                x=0.06,
+                y=-0.06,
+                yanchor="top",
+                pad=dict(t=10, b=0),
+                steps=[
+                    dict(
+                        method="animate",
+                        args=[
+                            [str(k)],
+                            dict(
+                                frame=dict(duration=0, redraw=True),
+                                mode="immediate",
+                                transition=dict(duration=0),
+                            ),
+                        ],
+                        label=str(k + 1),
+                    )
+                    for k in range(len(frames))
+                ],
+            )
+        ],
+    )
+    fig.update_xaxes(
+        range=[-r_max, r_max],
+        scaleanchor="y",
+        scaleratio=1,
+        showticklabels=False,
+        showgrid=True,
+        gridcolor="rgba(0,0,0,0.12)",
+    )
+    fig.update_yaxes(
+        range=[-r_max, r_max],
+        showticklabels=False,
+        showgrid=True,
+        gridcolor="rgba(0,0,0,0.12)",
+    )
+    return fig
 
 
 def _onboarding_card() -> None:
@@ -657,17 +709,39 @@ def main() -> None:
         "j_list": j_list,
         "trail_max_points": trail_cap,
     }
-    st.session_state._bowl_anim_idx = 0
-
-    st.subheader("Bowl trajectories (auto-loop)")
+    st.subheader("Bowl trajectories")
     st.caption(
         "Each marble is one person; its path on the bowl follows the same simulated emotional "
         "states as the time series below (blue = Person A, x₁ · orange = Person B, x₂)."
     )
     st.caption(
-        "Left: 3D view — marbles sit on the bowl surface. Right: plan view from above, paths inside the rim."
+        "Left: 3D bowl with full paths (updates when you change parameters). Right: plan view — "
+        "use ▶ Play or the slider (animation runs in the browser; avoids server-timer websocket "
+        "glitches)."
     )
-    _bowl_auto_loop_fragment()
+    c_bowl_l, c_bowl_r = st.columns([0.52, 0.48], gap="small")
+    with c_bowl_l:
+        st.plotly_chart(
+            _bowl_static_3d_figure(st.session_state.bowl_animation_payload),
+            width="stretch",
+            key="bowl_static_3d",
+            theme=None,
+            config={
+                "displayModeBar": False,
+                "plotGlPixelRatio": float(os.environ.get("LOVE_BOWL_GL_PIXEL_RATIO", "1")),
+            },
+        )
+    with c_bowl_r:
+        st.plotly_chart(
+            _bowl_plan_interactive_figure(st.session_state.bowl_animation_payload),
+            width="stretch",
+            key="bowl_plan_interactive",
+            theme=None,
+            config={
+                "displayModeBar": False,
+                "plotGlPixelRatio": float(os.environ.get("LOVE_BOWL_GL_PIXEL_RATIO", "1")),
+            },
+        )
 
     st.subheader(f"Emotional states — {regime}")
     fig1, ax1 = plt.subplots(figsize=(11, 3.2))
